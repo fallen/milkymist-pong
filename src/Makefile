@@ -1,7 +1,7 @@
 MMDIR?=../..
 include $(MMDIR)/software/include.mak
 
-OBJECTS=crt0.o isr.o brd.o time.o mem.o vga.o snd.o slowout.o hdlcd.o tmu.o pfpu.o line.o main.o
+OBJECTS=crt0.o isr.o brd.o time.o mem.o vga.o snd.o slowout.o hdlcd.o tmu.o pfpu.o line.o modsynth.o main.o
 SEGMENTS=-j .text -j .data -j .rodata
 
 all: boot.bin
