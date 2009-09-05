@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sat Sep  5 17:55:36 2009 texane
+** Last update Sat Sep  5 22:17:06 2009 texane
 */
 
 
@@ -47,6 +47,7 @@ struct chan_state
   /* current division */
   unsigned int ipat;
   unsigned int idiv;
+  unsigned int ismp;
 
   /* offset in the sample in bytes */
   unsigned int smpoff;
@@ -62,6 +63,7 @@ struct mod_context
   const struct sample_desc* sdescs;
   const void* sdata[32];
 
+  unsigned int ipat; /* initial pattern */
   unsigned int npats;
   const void* pdata;
 
@@ -260,6 +262,8 @@ static int load_file(mod_context_t* mc)
       goto on_error;
     }
 
+  mc->ipat = *rc.pos;
+
   for (pos = rc.pos, npats = 0, ipos = 0; ipos < npos; ++ipos, ++pos)
     if (npats < *pos)
       npats = *pos;
@@ -345,8 +349,114 @@ static int load_file(mod_context_t* mc)
 
 /* fx handling */
 
-static const char* fx_xid_to_string(unsigned int i)
+
+static inline unsigned int fx_get_first_param(unsigned int fx)
 {
+  return (fx & 0xf0) >> 4;
+}
+
+
+static inline unsigned int fx_get_second_param(unsigned int fx)
+{
+  return fx & 0x0f;
+}
+
+
+static void fx_do_arpeggio(mod_context_t* mc,
+			   struct chan_state* cs,
+			   unsigned int fx)
+{
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
+}
+
+
+static void fx_do_set_volume(mod_context_t* mc,
+			     struct chan_state* cs,
+			     unsigned int fx)
+{
+  /* legal volumes from 0 to 64 */
+
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
+
+  cs->vol = fx_get_first_param(fx) * 16 + fx_get_second_param(fx);
+}
+
+
+static void fx_do_set_speed(mod_context_t* mc,
+			    struct chan_state* cs,
+			    unsigned int fx)
+{
+  unsigned int speed = fx_get_first_param(fx) * 16 + fx_get_second_param(fx);
+
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
+
+  if (speed == 0)
+    speed = 1;
+}
+
+
+static void fx_do_unknown(mod_context_t* mc,
+			  struct chan_state* cs,
+			  unsigned int fx)
+{
+  DEBUG_PRINTF("unknown fx(0x%03x)\n", fx);
+}
+
+
+struct fx_pair
+{
+  void (*fn)(mod_context_t*, struct chan_state*, unsigned int);
+  const char* name;
+};
+
+
+static const struct fx_pair base_fxs[] =
+  {
+    { fx_do_arpeggio, "arpeggio" },
+    { fx_do_unknown, "slide up" },
+    { fx_do_unknown, "slide down" },
+    { fx_do_unknown, "slide to node" },
+    { fx_do_unknown, "vibrato" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_set_volume, "set volume" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_set_speed, "set speed" }
+  };
+
+
+static const struct fx_pair extended_fxs[] =
+  {
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" },
+    { fx_do_unknown, "" }
+  };
+
+
+static inline const char* fx_xid_to_string(unsigned int i)
+{
+
+#if 0
+
 #define FX_XID_CASE(I) case FX_XID_ ## I: s = #I; break
 
 #define FX_XID_SET_FILTER 0
@@ -393,11 +503,21 @@ static const char* fx_xid_to_string(unsigned int i)
     }
 
   return s;
+
+#else
+
+  return extended_fxs[i].name;
+
+#endif
+
 }
 
 
-static const char* fx_id_to_string(unsigned int i)
+static inline const char* fx_id_to_string(unsigned int i)
 {
+
+#if 0
+
 #define FX_ID_CASE(I) case FX_ID_ ## I: s = #I; break
 
 #define FX_ID_ARPEGGIO 0
@@ -444,17 +564,40 @@ static const char* fx_id_to_string(unsigned int i)
     }
 
   return s;
+
+#else
+
+  return base_fxs[i].name;
+
+#endif
+
 }
+
+
+static inline void fx_apply(mod_context_t* mc,
+			    struct chan_state* cs,
+			    unsigned int fx)
+{
+  const unsigned int i = (fx & 0xf00) >> 8;
+
+  if (i != 14)
+    base_fxs[i].fn(mc, cs, fx);
+  else
+    extended_fxs[(fx & 0xf0) >> 4].fn(mc, cs, fx);
+}
+
 
 
 /* on per channel state */
 
 static inline void chan_init_state(struct chan_state* cs,
-				   unsigned int ichan)
+				   unsigned int ichan,
+				   unsigned int ipat)
 {
   memset(cs, 0, sizeof(struct chan_state));
 
   cs->ichan = ichan;
+  cs->ipat = ipat;
 }
 
 
@@ -466,17 +609,29 @@ int chan_produce_samples(struct chan_state* cs,
 
   const unsigned char* chan_data;
   unsigned int freq;
-  uint8_t ismp;
-  uint16_t period;
-  uint16_t effect;
+  unsigned int ismp;
+  unsigned int period;
+  unsigned int fx;
 
   /* extract channel data */
 
   chan_data = get_pat_div_chan(mc, cs->ipat, cs->idiv, cs->ichan);
 
   ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
-  period = ((uint16_t)(chan_data[0] & 0x0f) << 8) | chan_data[1];
-  effect = ((uint16_t)(chan_data[2] & 0x0f) << 8) | chan_data[3];
+  period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
+  fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
+
+  /* old one if 0. samples are 1 based, not 0, so decrease. */
+
+  if (ismp)
+    {
+      ismp -= 1;
+      cs->ismp = ismp;
+    }
+  else
+    {
+      ismp = cs->ismp;
+    }
 
   /* next division on end of sample */
 
@@ -499,36 +654,20 @@ int chan_produce_samples(struct chan_state* cs,
 	}
     }
 
-  /* we are at the beginning of a sample, process fx */
+  /* beginning of a sample */
 
   if (cs->smpoff == 0)
     {
-      switch ((effect & 0xf0) >> 4)
-	{
+      /* compute freq */
 
-	case FX_ID_EXTENDED:
-	  {
-	    switch (effect & 0x0f)
-	      {
-	      default:
-		{
-		  DEBUG_PRINTF("unknwon extended fx: %s\n", fx_xid_to_string(effect & 0x0f));
-		  break;
-		}
-	      }
-	  }
+      /* handle effect */
 
-	default:
-	  {
-	    DEBUG_PRINTF("unknown fx: %s\n", fx_id_to_string((effect & 0xf0) >> 4));
-	    break;
-	  }
-	}
+      fx_apply(mc, cs, fx);
     }
 
   /* play the sample */
   {
-    printf("sample: %u, fx: %u, period: %u\n", ismp, (effect & 0xf0) >> 4, period); getchar();
+    printf("sample: %u, period: %u\n", ismp, period); getchar();
     ++cs->idiv;
   }
 
@@ -578,10 +717,10 @@ int mod_load_file(mod_context_t** mc, const char* path)
       goto on_error;
     }
 
-  chan_init_state(&(*mc)->cstates[0], 0);
-  chan_init_state(&(*mc)->cstates[1], 1);
-  chan_init_state(&(*mc)->cstates[2], 2);
-  chan_init_state(&(*mc)->cstates[3], 3);
+  chan_init_state(&(*mc)->cstates[0], 0, (*mc)->ipat);
+  chan_init_state(&(*mc)->cstates[1], 1, (*mc)->ipat);
+  chan_init_state(&(*mc)->cstates[2], 2, (*mc)->ipat);
+  chan_init_state(&(*mc)->cstates[3], 3, (*mc)->ipat);
 
   return 0;
 
