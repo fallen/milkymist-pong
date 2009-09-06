@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 00:34:04 2009 texane
+** Last update Sun Sep  6 01:25:44 2009 texane
 */
 
 
@@ -71,6 +71,8 @@ struct mod_context
 
   const struct sample_desc* sdescs;
   const void* sdata[32];
+
+  const unsigned char* song_pos;
 
   unsigned int ipat; /* initial pattern */
   unsigned int npats;
@@ -304,6 +306,8 @@ static int load_file(mod_context_t* mc)
       goto on_error;
     }
 
+  mc->song_pos = rc.pos;
+
   mc->ipat = *rc.pos;
 
   for (pos = rc.pos, npats = 0, ipos = 0; ipos < npos; ++ipos, ++pos)
@@ -412,6 +416,18 @@ static void fx_do_arpeggio(mod_context_t* mc,
 }
 
 
+static void fx_do_position_jump(mod_context_t* mc,
+				struct chan_state* cs,
+				unsigned int fx)
+{
+  /* continue at song position */
+  
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));  
+
+  cs->ipat = mc->song_pos[(fx_get_first_param(fx) * 16 + fx_get_second_param(fx)) & 0x7f];
+}
+
+
 static void fx_do_set_volume(mod_context_t* mc,
 			     struct chan_state* cs,
 			     unsigned int fx)
@@ -421,6 +437,19 @@ static void fx_do_set_volume(mod_context_t* mc,
   DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
 
   cs->vol = fx_get_first_param(fx) * 16 + fx_get_second_param(fx);
+}
+
+
+static void fx_do_pattern_break(mod_context_t* mc,
+				struct chan_state* cs,
+				unsigned int fx)
+{
+  /* continue at next pattern, new division */
+
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
+
+  cs->ipat += 1;
+  cs->idiv = (fx_get_first_param(fx) * 10 + fx_get_second_param(fx)) & 0x3f;
 }
 
 
@@ -465,9 +494,9 @@ static const struct fx_pair base_fxs[] =
     { fx_do_unknown, "" },
     { fx_do_unknown, "" },
     { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
+    { fx_do_position_jump, "position jump" },
     { fx_do_set_volume, "set volume" },
-    { fx_do_unknown, "" },
+    { fx_do_pattern_break, "pattern break" },
     { fx_do_unknown, "" },
     { fx_do_set_speed, "set speed" }
   };
@@ -652,7 +681,7 @@ int chan_produce_samples(struct chan_state* cs,
   /* produce nsmps 48khz samples */
 
   const unsigned char* chan_data;
-  unsigned int freq;
+  unsigned int rate;
   unsigned int ismp;
   unsigned int period;
   unsigned int fx;
@@ -674,9 +703,10 @@ int chan_produce_samples(struct chan_state* cs,
       if (ismp)
 	cs->ismp = ismp - 1;
 
-      /* compute freq */
+      /* compute sample rate */
 
-      freq = 0;
+      rate = 7159090.5 / (period * 2);
+      printf("rate: %u\n", rate);
 
       /* handle effect */
 
@@ -729,7 +759,7 @@ int chan_produce_samples(struct chan_state* cs,
 /*   while (1) */
 #endif
     {
-      freq = cs->freq;
+/*       freq = cs->freq; */
 
 /*       while (freq == cs->freq) */
 	{
