@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 01:25:44 2009 texane
+** Last update Sun Sep  6 09:02:28 2009 texane
 */
 
 
@@ -52,6 +52,9 @@ struct chan_state
   /* offset in the sample in bytes */
   unsigned int smpoff;
 
+  /* sample rate */
+  unsigned int smprate;
+
   /* chan flags */
 #define CHAN_FLAG_IS_SAMPLE_STARTING (1 << 0)
 #define CHAN_FLAG_IS_SAMPLE_REPEATING (1 << 1)
@@ -81,6 +84,11 @@ struct mod_context
   struct chan_state cstates[4];
 };
 
+
+
+/* just to be clearer in the code */
+
+#define BYTES_PER_WORD 2
 
 
 /* utility functions */
@@ -171,9 +179,7 @@ struct sample_desc
 
 static inline unsigned int get_sdesc_length(const struct sample_desc* sd)
 {
-  /* big endian, expressed in words */
-
-  return be16_to_host((const void*)&sd->length) * 2;
+  return be16_to_host((const void*)&sd->length) * BYTES_PER_WORD;
 }
 
 
@@ -216,16 +222,14 @@ static inline int get_sample_finetune(const mod_context_t* mc,
 static unsigned int get_sample_repeat_offset(const mod_context_t* mc,
 					     unsigned int ismp)
 {
-  /* stored in words */
-  return be16_to_host(&get_sample_desc(mc, ismp)->roff) * 2;
+  return be16_to_host(&get_sample_desc(mc, ismp)->roff) * BYTES_PER_WORD;
 }
 
 
 static unsigned int get_sample_repeat_length(const mod_context_t* mc,
 					     unsigned int ismp)
 {
-  /* stored in words */
-  return be16_to_host(&get_sample_desc(mc, ismp)->rlength) * 2;
+  return be16_to_host(&get_sample_desc(mc, ismp)->rlength) * BYTES_PER_WORD;
 }
 
 
@@ -416,6 +420,27 @@ static void fx_do_arpeggio(mod_context_t* mc,
 }
 
 
+static void fx_do_set_sample_offset(mod_context_t* mc,
+				    struct chan_state* cs,
+				    unsigned int fx)
+{
+  unsigned int smpoff =
+    fx_get_first_param(fx) * 4096 +
+    fx_get_second_param(fx) * 256 *
+    BYTES_PER_WORD;
+
+  DEBUG_PRINTF("(%x)\n", smpoff);
+
+  if (smpoff >= (get_sample_length(mc, cs->ismp) - 1))
+    {
+      DEBUG_ERROR("smpoff >= length\n");
+      return ;
+    }
+
+  cs->smpoff = smpoff;
+}
+
+
 static void fx_do_position_jump(mod_context_t* mc,
 				struct chan_state* cs,
 				unsigned int fx)
@@ -492,7 +517,7 @@ static const struct fx_pair base_fxs[] =
     { fx_do_unknown, "" },
     { fx_do_unknown, "" },
     { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
+    { fx_do_set_sample_offset, "set sample offset" },
     { fx_do_unknown, "" },
     { fx_do_position_jump, "position jump" },
     { fx_do_set_volume, "set volume" },
@@ -674,6 +699,55 @@ static inline void chan_init_state(struct chan_state* cs,
 }
 
 
+static inline int is_end_of_repeating_sample(const mod_context_t* mc,
+					     const struct chan_state* cs,
+					     unsigned int ismp)
+{
+  return
+    cs->smpoff >=
+    get_sample_repeat_offset(mc, ismp) +
+    get_sample_repeat_length(mc, ismp);  
+}
+
+
+static inline int is_end_of_sample(const mod_context_t* mc,
+				   const struct chan_state* cs,
+				   unsigned int ismp)
+{
+  if ( ! CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING) )
+    return cs->smpoff >= get_sample_length(mc, ismp);
+
+  return is_end_of_repeating_sample(mc, cs, ismp);
+}
+
+
+static inline unsigned int get_remaining_sample_length(const mod_context_t* mc,
+						       const struct chan_state* cs,
+						       unsigned int ismp)
+{
+  if ( ! CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING) )
+    return get_sample_length(mc, ismp) - cs->smpoff;
+
+  return
+    get_sample_repeat_offset(mc, ismp) +
+    get_sample_repeat_length(mc, ismp) -
+    cs->smpoff;
+}
+
+
+static void resample(unsigned char* obuf,
+		     const unsigned char* ibuf,
+		     unsigned int nsmps,
+		     unsigned int ratio)
+{
+  /* obuf is sle16 interleaved
+     ibuf is 8bits pcm
+     nsmps the input sample count
+     ratio the resampling ratio
+   */
+}
+
+
 int chan_produce_samples(struct chan_state* cs,
 			 mod_context_t* mc,
 			 unsigned int nsmps)
@@ -681,10 +755,11 @@ int chan_produce_samples(struct chan_state* cs,
   /* produce nsmps 48khz samples */
 
   const unsigned char* chan_data;
-  unsigned int rate;
   unsigned int ismp;
   unsigned int period;
   unsigned int fx;
+
+ produce_more_samples:
 
   /* extract channel data */
 
@@ -693,6 +768,8 @@ int chan_produce_samples(struct chan_state* cs,
   ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
   period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
   fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
+
+  /* reposition */
 
   if (CHAN_HAS_FLAG(cs, IS_SAMPLE_STARTING))
     {
@@ -703,10 +780,11 @@ int chan_produce_samples(struct chan_state* cs,
       if (ismp)
 	cs->ismp = ismp - 1;
 
-      /* compute sample rate */
+      /* sample rate (bytes per sec to send). todo, finetune. */
 
-      rate = 7159090.5 / (period * 2);
-      printf("rate: %u\n", rate);
+#define PAL_SYNC_RATE 7093789.2
+#define NTSC_SYNC_RATE 7159090.5
+      cs->smprate = PAL_SYNC_RATE / (period * 2);
 
       /* handle effect */
 
@@ -714,12 +792,12 @@ int chan_produce_samples(struct chan_state* cs,
     }
   else if (CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING))
     {
-      if (cs->smpoff >= get_sample_repeat_length(mc, ismp))
+      if (is_end_of_repeating_sample(mc, cs, ismp))
 	cs->smpoff = get_sample_repeat_offset(mc, ismp);
     }
   else if (cs->smpoff >= get_sample_length(mc, ismp))
     {
-      /* repeating sample */
+      /* sample done, is a repeating one */
 
       if (get_sample_repeat_length(mc, ismp))
 	{
@@ -728,6 +806,8 @@ int chan_produce_samples(struct chan_state* cs,
 	}
       else
 	{
+	  /* next sample */
+
 	  CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
 
 	  cs->smpoff = 0;
@@ -742,34 +822,42 @@ int chan_produce_samples(struct chan_state* cs,
 		cs->ipat = 0;
 	    }
 	}
+
+      goto produce_more_samples;
     }
 
+  /* generate sample data 48khz based */
 
-  /* play the sample */
-  {
-    printf("sample: %u, period: %u\n", ismp, period); getchar();
-    ++cs->idiv;
-  }
-
-  /* todo: when sample is done, next division. when division is done, next pattern. */
-
-#if 0
-  while (sstream_count(ss) < nsmps)
-#else
-/*   while (1) */
-#endif
+  while (nsmps)
     {
-/*       freq = cs->freq; */
+      if (is_end_of_sample(mc, cs, ismp))
+	goto produce_more_samples;
 
-/*       while (freq == cs->freq) */
-	{
+      /* how much bytes left (smprate based) */
+      {
+	unsigned int nsmps_at_smprate;
+	unsigned int nsmps_at_48khz;
+	unsigned int nsmps_to_resample;
+	unsigned int ratio;
+
+	nsmps_at_smprate = get_remaining_sample_length(mc, cs, ismp);
+
+	nsmps_at_48khz = (48000 * nsmps_at_smprate) / cs->smprate;
+
 #if 0
-	  /* read chan samples and feed the sample stream */
-
-	  if (sstream_write(ss, smps, nsmps, freq) == -1)
-	    return -1;
+	resample(obuf, ibuf, nsmps_to_resample, ratio);
 #endif
-	}
+
+	if (nsmps_at_48khz > nsmps)
+	  {
+	    nsmps = 0;
+	  }
+	else
+	  {
+	    nsmps -= nsmps_at_smprate;
+	  }
+      }
+
     }
 
   return 0;
@@ -918,25 +1006,6 @@ static void mix_sstreams(int16_t* obuf, struct sstream* s0, struct sstream* s1, 
       obuf[0] = (uint16_t)((uint32_t)*p + (uint32_t)*q);
       obuf[1] = (uint16_t)((uint32_t)*r + (uint32_t)*s);
     }
-}
-
-
-
-/* fetching machine */
-
-static void fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
-{
-  /* fetch nsmps 48khz based */
-
-  /* produce samples */
-  chan_produce_samples(&mc->chans[0], nsmps);
-  chan_produce_samples(&mc->chans[1], nsmps);
-  chan_produce_samples(&mc->chans[2], nsmps);
-  chan_produce_samples(&mc->chans[3], nsmps);
-
-  /* consume samples */
-  mix_sstreams(obuf, mc->chans[0].ss, mc->chans[1], nsmps);
-  mix_sstreams(obuf, mc->chans[2].ss, mc->chans[3], nsmps);
 }
 
 
