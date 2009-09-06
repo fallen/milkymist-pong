@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 09:02:28 2009 texane
+** Last update Sun Sep  6 09:34:37 2009 texane
 */
 
 
@@ -735,21 +735,60 @@ static inline unsigned int get_remaining_sample_length(const mod_context_t* mc,
 }
 
 
-static void resample(unsigned char* obuf,
-		     const unsigned char* ibuf,
+static inline const void* get_chan_sample_data(const mod_context_t* mc,
+					       const struct chan_state* cs,
+					       unsigned int ismp)
+{
+  return (const int8_t*)get_sample_data(mc, ismp) + cs->smpoff;
+}
+
+
+static unsigned int compute_resampling_ratio(unsigned int nsmps_at_48khz,
+					     unsigned int nsmps_at_smprate)
+{
+  /* todo */
+  return nsmps_at_48khz / nsmps_at_smprate;
+}
+
+
+#if 0
+static void mix()
+{
+}
+#endif
+
+
+static void resample(int16_t* obuf, const int8_t* ibuf,
 		     unsigned int nsmps,
-		     unsigned int ratio)
+		     unsigned int ratio,
+		     unsigned int ichan)
 {
   /* obuf is sle16 interleaved
      ibuf is 8bits pcm
      nsmps the input sample count
      ratio the resampling ratio
    */
+
+  switch (ichan)
+    {
+    case 0:
+      break;
+
+    case 1:
+      break;
+
+    case 2:
+      break;
+
+    case 3:
+      break;
+    }
 }
 
 
 int chan_produce_samples(struct chan_state* cs,
 			 mod_context_t* mc,
+			 int16_t* obuf,
 			 unsigned int nsmps)
 {
   /* produce nsmps 48khz samples */
@@ -826,7 +865,7 @@ int chan_produce_samples(struct chan_state* cs,
       goto produce_more_samples;
     }
 
-  /* generate sample data 48khz based */
+  /* generate nsmps 48khz samples */
 
   while (nsmps)
     {
@@ -837,25 +876,29 @@ int chan_produce_samples(struct chan_state* cs,
       {
 	unsigned int nsmps_at_smprate;
 	unsigned int nsmps_at_48khz;
-	unsigned int nsmps_to_resample;
 	unsigned int ratio;
 
 	nsmps_at_smprate = get_remaining_sample_length(mc, cs, ismp);
 
 	nsmps_at_48khz = (48000 * nsmps_at_smprate) / cs->smprate;
 
-#if 0
-	resample(obuf, ibuf, nsmps_to_resample, ratio);
-#endif
+	/* count would be greater than nsmps */
 
 	if (nsmps_at_48khz > nsmps)
 	  {
-	    nsmps = 0;
+	    nsmps_at_smprate -= (nsmps_at_48khz - nsmps);
+	    nsmps_at_48khz = (48000 * nsmps_at_smprate) / cs->smprate;
 	  }
-	else
-	  {
-	    nsmps -= nsmps_at_smprate;
-	  }
+
+	ratio =
+	  compute_resampling_ratio(nsmps_at_48khz, nsmps_at_smprate);
+
+	resample(obuf, get_chan_sample_data(mc, cs, ismp),
+		 nsmps_at_smprate, ratio, cs->ichan);
+
+	nsmps -= nsmps_at_48khz;
+
+	cs->smpoff += nsmps_at_smprate;
       }
 
     }
@@ -909,7 +952,7 @@ void mod_destroy(mod_context_t* mc)
 }
 
 
-int mod_fetch(mod_context_t* mc, unsigned char* obuf, unsigned int nsmps)
+int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 {
   /* fill a 48khz 16-bit signed interleaved stereo audio buffer
      from a mod file. name the mod filename, buffer the sample
@@ -921,10 +964,10 @@ int mod_fetch(mod_context_t* mc, unsigned char* obuf, unsigned int nsmps)
 
   memset(obuf, 0, STEREO_CHAN_COUNT * BYTES_PER_SLE16_INTERLEAVED * nsmps);
 
-  chan_produce_samples(&mc->cstates[0], mc, nsmps);
-  chan_produce_samples(&mc->cstates[1], mc, nsmps);
-  chan_produce_samples(&mc->cstates[2], mc, nsmps);
-  chan_produce_samples(&mc->cstates[3], mc, nsmps);
+  chan_produce_samples(&mc->cstates[0], mc, obuf, nsmps);
+  chan_produce_samples(&mc->cstates[1], mc, obuf, nsmps);
+  chan_produce_samples(&mc->cstates[2], mc, obuf, nsmps);
+  chan_produce_samples(&mc->cstates[3], mc, obuf, nsmps);
 
   return 0;
 }
