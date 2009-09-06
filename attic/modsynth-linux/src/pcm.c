@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Fri Sep  4 10:02:42 2009 texane
-** Last update Fri Sep  4 10:57:09 2009 texane
+** Last update Sun Sep  6 12:39:17 2009 texane
 */
 
 
@@ -34,7 +34,7 @@ struct pcm_buf
 
 #define PCM_CHAN_COUNT 2
 #define PCM_SAMPLE_FREQ 48000
-#define PCM_BYTES_PER_SAMPLE (16 / 8)
+#define PCM_BYTES_PER_SAMPLE 2
 #define PCM_PERIOD_SIZE 32
 
 

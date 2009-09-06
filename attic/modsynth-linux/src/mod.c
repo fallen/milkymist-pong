@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 09:59:43 2009 texane
+** Last update Sun Sep  6 14:52:13 2009 texane
 */
 
 
@@ -91,6 +91,7 @@ struct mod_context
 #define BYTES_PER_WORD 2
 #define BYTES_PER_SLE16_INTERLEAVED 2
 #define STEREO_CHAN_COUNT 2
+#define MOD_CHAN_COUNT 4
 
 
 
@@ -232,7 +233,15 @@ static unsigned int get_sample_repeat_offset(const mod_context_t* mc,
 static unsigned int get_sample_repeat_length(const mod_context_t* mc,
 					     unsigned int ismp)
 {
-  return be16_to_host(&get_sample_desc(mc, ismp)->rlength) * BYTES_PER_WORD;
+  /* only valid if > 1 */
+
+  unsigned int len;
+
+  len = be16_to_host(&get_sample_desc(mc, ismp)->rlength);
+  if (len <= 1)
+    return 0;
+
+  return len * BYTES_PER_WORD;
 }
 
 
@@ -374,13 +383,12 @@ static int load_file(mod_context_t* mc)
 
   /* sample data. build sdata lookup table. */
 
-  pos = rc.pos;
-  mc->sdata[0] = (const void*)pos;
-  size = get_sample_length(mc, 0);
+  size = 0;
 
-  for (ismp = 1; ismp < 31; ++ismp)
+  for (ismp = 0; ismp < 31; ++ismp)
     {
-      mc->sdata[ismp] = (const unsigned char*)mc->sdata[ismp - 1] + get_sample_length(mc, ismp);
+      /* todo: check for addition underflow */
+      mc->sdata[ismp] = rc.pos + size;
       size += get_sample_length(mc, ismp);
     }
 
@@ -707,9 +715,10 @@ static inline int is_end_of_repeating_sample(const mod_context_t* mc,
 					     unsigned int ismp)
 {
   return
-    cs->smpoff >=
+    cs->smpoff >
     get_sample_repeat_offset(mc, ismp) +
-    get_sample_repeat_length(mc, ismp);  
+    get_sample_repeat_length(mc, ismp) -
+    MOD_CHAN_COUNT;
 }
 
 
@@ -718,39 +727,47 @@ static inline int is_end_of_sample(const mod_context_t* mc,
 				   unsigned int ismp)
 {
   if ( ! CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING) )
-    return cs->smpoff >= get_sample_length(mc, ismp);
+    return cs->smpoff > (get_sample_length(mc, ismp) - MOD_CHAN_COUNT);
 
   return is_end_of_repeating_sample(mc, cs, ismp);
 }
 
 
-static inline unsigned int get_remaining_sample_length(const mod_context_t* mc,
-						       const struct chan_state* cs,
-						       unsigned int ismp)
+static inline unsigned int
+get_remaining_sample_length(const mod_context_t* mc,
+			    const struct chan_state* cs)
 {
   if ( ! CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING) )
-    return get_sample_length(mc, ismp) - cs->smpoff;
+    return get_sample_length(mc, cs->ismp) - cs->smpoff;
 
   return
-    get_sample_repeat_offset(mc, ismp) +
-    get_sample_repeat_length(mc, ismp) -
-    cs->smpoff;
+    get_sample_repeat_length(mc, cs->ismp) -
+    (cs->smpoff - get_sample_repeat_offset(mc, cs->ismp));
+}
+
+
+static inline unsigned int
+get_remaining_sample_count(const mod_context_t* mc,
+			   const struct chan_state* cs)
+{
+  return get_remaining_sample_length(mc, cs) / MOD_CHAN_COUNT;
 }
 
 
 static inline const void* get_chan_sample_data(const mod_context_t* mc,
-					       const struct chan_state* cs,
-					       unsigned int ismp)
+					       const struct chan_state* cs)
 {
-  return (const int8_t*)get_sample_data(mc, ismp) + cs->smpoff;
+  return (const int8_t*)get_sample_data(mc, cs->ismp) + cs->smpoff;
 }
 
 
 static unsigned int compute_resampling_ratio(unsigned int nsmps_at_48khz,
 					     unsigned int nsmps_at_smprate)
 {
-  /* todo:  */
-  return nsmps_at_48khz / nsmps_at_smprate;
+  /* todo */
+
+  const unsigned int ratio = nsmps_at_48khz / nsmps_at_smprate;
+  return ratio ? ratio : 1;
 }
 
 
@@ -772,10 +789,11 @@ static int16_t mix(int8_t a, int8_t b)
 }
 
 
-static void resample(int16_t* obuf, const int8_t* ibuf,
-		     unsigned int nsmps,
-		     unsigned int ratio,
-		     unsigned int ichan)
+static void*
+resample(int16_t* obuf, const int8_t* ibuf,
+	 unsigned int nsmps,
+	 unsigned int ratio,
+	 unsigned int ichan)
 {
   /* obuf is sle16 interleaved
      ibuf is 8bits pcm
@@ -785,32 +803,56 @@ static void resample(int16_t* obuf, const int8_t* ibuf,
 
   /* todo: smoothing / averaging function */
 
-  const unsigned int step = ratio * STEREO_CHAN_COUNT;
+  size_t roff = 0;
   unsigned int i;
 
   switch (ichan)
     {
     case 2:
-      /* unalign buffer and fallthrough */
-      ++ibuf; 
+      /* unalign buffers and fallthrough (dont break) */
+      roff = 1;
+      ++obuf;
+      ibuf += 2;
 
     case 0:
-      for (; nsmps; --nsmps, ++ibuf, obuf += step)
-	for (i = 0; i < ratio; ++i)
-	  obuf[i] = *ibuf;
+      for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
+	for (i = 0; i < ratio; ++i, obuf += STEREO_CHAN_COUNT)
+	  *obuf = *ibuf;
       break;
 
     case 3:
-      /* unalign buffer and fallthrough */
-      ++ibuf; 
+      /* unalign buffers and fallthrough (dont break) */
+      roff = 1;
+      ++obuf;
+      ibuf += 2;
 
     case 1:
+      ++ibuf;
+
       /* assume chan0 sample already stored */
-      for (; nsmps; --nsmps, ++ibuf, obuf += step)
-	for (i = 0; i < ratio; ++i)
-	  obuf[i] = mix(obuf[i], *ibuf);
+      for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
+	for (i = 0; i < ratio; ++i, obuf += STEREO_CHAN_COUNT)
+	  *obuf = mix(*obuf, *ibuf);
       break;
     }
+
+  return obuf - roff;
+}
+
+
+static inline unsigned int
+nsmps_from_smprate_to_48khz(unsigned int nsmps, unsigned int smprate)
+{
+  const unsigned int count = (48000 * nsmps) / smprate;
+  return count ? count : 1;
+}
+
+
+static inline unsigned int
+nsmps_from_48khz_to_smprate(unsigned int nsmps, unsigned int smprate)
+{
+  const unsigned int count = (smprate * nsmps) / 48000;
+  return count ? count : 1;
 }
 
 
@@ -822,9 +864,10 @@ int chan_produce_samples(struct chan_state* cs,
   /* produce nsmps 48khz samples */
 
   const unsigned char* chan_data;
-  unsigned int ismp;
   unsigned int period;
   unsigned int fx;
+
+  DEBUG_ENTER();
 
  produce_more_samples:
 
@@ -832,7 +875,6 @@ int chan_produce_samples(struct chan_state* cs,
 
   chan_data = get_pat_div_chan(mc, cs->ipat, cs->idiv, cs->ichan);
 
-  ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
   period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
   fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
 
@@ -840,6 +882,8 @@ int chan_produce_samples(struct chan_state* cs,
 
   if (CHAN_HAS_FLAG(cs, IS_SAMPLE_STARTING))
     {
+      const unsigned int ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
+
       CHAN_CLEAR_FLAG(cs, IS_SAMPLE_STARTING);
 
       /* samples are 1 based, so decrement */
@@ -851,7 +895,9 @@ int chan_produce_samples(struct chan_state* cs,
 
 #define PAL_SYNC_RATE 7093789.2
 #define NTSC_SYNC_RATE 7159090.5
-      cs->smprate = PAL_SYNC_RATE / (period * 2);
+
+      if (period)
+	cs->smprate = PAL_SYNC_RATE / (period * 2);
 
       /* handle effect */
 
@@ -859,17 +905,17 @@ int chan_produce_samples(struct chan_state* cs,
     }
   else if (CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING))
     {
-      if (is_end_of_repeating_sample(mc, cs, ismp))
-	cs->smpoff = get_sample_repeat_offset(mc, ismp);
+      if (is_end_of_repeating_sample(mc, cs, cs->ismp))
+	cs->smpoff = get_sample_repeat_offset(mc, cs->ismp);
     }
-  else if (cs->smpoff >= get_sample_length(mc, ismp))
+  else if (cs->smpoff >= get_sample_length(mc, cs->ismp))
     {
       /* sample done, is a repeating one */
 
-      if (get_sample_repeat_length(mc, ismp))
+      if (get_sample_repeat_length(mc, cs->ismp))
 	{
 	  CHAN_SET_FLAG(cs, IS_SAMPLE_REPEATING);
-	  cs->smpoff = get_sample_repeat_offset(mc, ismp);
+	  cs->smpoff = get_sample_repeat_offset(mc, cs->ismp);
 	}
       else
 	{
@@ -897,39 +943,52 @@ int chan_produce_samples(struct chan_state* cs,
 
   while (nsmps)
     {
-      if (is_end_of_sample(mc, cs, ismp))
+      unsigned int nsmps_at_smprate;
+      unsigned int nsmps_at_48khz;
+      unsigned int ratio;
+
+      /* how much can we produce with the current sample */
+
+      nsmps_at_smprate = get_remaining_sample_count(mc, cs);
+
+      if (!nsmps_at_smprate)
+	{
+	  /* no more, sample done */
+
+	  cs->smpoff = get_sample_length(mc, cs->ismp);
+	}
+
+      if (is_end_of_sample(mc, cs, cs->ismp))
 	goto produce_more_samples;
 
-      /* how much bytes left (smprate based) */
-      {
-	unsigned int nsmps_at_smprate;
-	unsigned int nsmps_at_48khz;
-	unsigned int ratio;
+      /* how much can we produce at 48khz */
 
-	nsmps_at_smprate = get_remaining_sample_length(mc, cs, ismp);
+      nsmps_at_48khz =
+	nsmps_from_smprate_to_48khz(nsmps_at_smprate, cs->smprate);
 
-	nsmps_at_48khz = (48000 * nsmps_at_smprate) / cs->smprate;
+      /* count would be greater than needed */
 
-	/* count would be greater than nsmps */
+      if (nsmps_at_48khz > nsmps)
+	{
+	  nsmps_at_48khz = nsmps;
 
-	if (nsmps_at_48khz > nsmps)
-	  {
-	    nsmps_at_smprate -= (nsmps_at_48khz - nsmps);
-	    nsmps_at_48khz = (48000 * nsmps_at_smprate) / cs->smprate;
-	  }
+	  nsmps_at_smprate =
+	    nsmps_from_48khz_to_smprate(nsmps_at_48khz, cs->smprate);
+	}
 
-	ratio =
-	  compute_resampling_ratio(nsmps_at_48khz, nsmps_at_smprate);
+      ratio =
+	compute_resampling_ratio(nsmps_at_48khz, nsmps_at_smprate);
 
-	resample(obuf, get_chan_sample_data(mc, cs, ismp),
+      obuf =
+	resample(obuf, get_chan_sample_data(mc, cs),
 		 nsmps_at_smprate, ratio, cs->ichan);
 
-	nsmps -= nsmps_at_48khz;
+      nsmps -= nsmps_at_48khz;
 
-	cs->smpoff += nsmps_at_smprate;
-      }
-
+      cs->smpoff += nsmps_at_smprate;
     }
+
+  DEBUG_LEAVE();
 
   return 0;
 }
