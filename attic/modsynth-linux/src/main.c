@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Wed Sep  2 19:20:16 2009 texane
-** Last update Sun Sep  6 18:12:33 2009 texane
+** Last update Sun Sep  6 19:14:58 2009 texane
 */
 
 
@@ -30,11 +30,11 @@ int main(int ac, char** av)
 
   pcm_alloc_buf(&pcm_buf, 48000);
 
-#if 1 /* 5 second to stdout */
+#if 1 /* 10 seconds to stdout */
   {
     unsigned int i;
 
-    for (i = 0; i < 30; ++i)
+    for (i = 0; i < 10; ++i)
       {
 	mod_fetch(mc, pcm_get_buf_data(pcm_buf), pcm_get_buf_count(pcm_buf));
 	write(1, pcm_get_buf_data(pcm_buf), pcm_get_buf_size(pcm_buf));

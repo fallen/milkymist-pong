@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 17:52:36 2009 texane
+** Last update Sun Sep  6 19:15:05 2009 texane
 */
 
 
@@ -882,12 +882,21 @@ int chan_produce_samples(struct chan_state* cs,
     {
       const unsigned int ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
 
+      /* todo: is this necessary */
+
+      if (!cs->ismp && !ismp)
+	return 0;
+
       CHAN_CLEAR_FLAG(cs, IS_SAMPLE_STARTING);
 
-      /* samples are 1 based, so decrement */
+      /* decrement since samples are 1 based */
 
       if (ismp)
 	cs->ismp = ismp - 1;
+
+      /* sample volume */
+
+      cs->vol = get_sample_volume(mc, cs->ismp);
 
       /* sample rate (bytes per sec to send). todo, finetune. */
 
@@ -964,7 +973,8 @@ int chan_produce_samples(struct chan_state* cs,
       /* to remove. when only 2 chans, this is set
 	 to 0 but it should be detected earlier
       */
-      if (!cs->smprate) return 0;
+      if (!cs->smprate)
+	return 0;
 
       nsmps_at_48khz =
 	nsmps_from_smprate_to_48khz(nsmps_at_smprate, cs->smprate);
@@ -981,6 +991,8 @@ int chan_produce_samples(struct chan_state* cs,
 
       ratio =
 	compute_resampling_ratio(nsmps_at_48khz, nsmps_at_smprate);
+
+      DEBUG_PRINTF("producing: %u, %u %u\n", cs->ichan, nsmps_at_48khz, ratio);
 
       obuf =
 	resample(obuf, get_chan_sample_data(mc, cs),
@@ -1051,10 +1063,10 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 
   chan_produce_samples(&mc->cstates[0], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[1], mc, obuf, nsmps);
-#if 0
   chan_produce_samples(&mc->cstates[2], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[3], mc, obuf, nsmps);
-#else
+
+#if 1 /* shift channels since appears to be 0 */
   {
     int16_t* p;
     for (p = (int16_t*)obuf + 1; nsmps; --nsmps, p += 2)
