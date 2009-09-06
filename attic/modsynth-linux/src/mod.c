@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 09:34:37 2009 texane
+** Last update Sun Sep  6 09:59:43 2009 texane
 */
 
 
@@ -89,6 +89,9 @@ struct mod_context
 /* just to be clearer in the code */
 
 #define BYTES_PER_WORD 2
+#define BYTES_PER_SLE16_INTERLEAVED 2
+#define STEREO_CHAN_COUNT 2
+
 
 
 /* utility functions */
@@ -746,16 +749,27 @@ static inline const void* get_chan_sample_data(const mod_context_t* mc,
 static unsigned int compute_resampling_ratio(unsigned int nsmps_at_48khz,
 					     unsigned int nsmps_at_smprate)
 {
-  /* todo */
+  /* todo:  */
   return nsmps_at_48khz / nsmps_at_smprate;
 }
 
 
-#if 0
-static void mix()
+static int16_t mix(int8_t a, int8_t b)
 {
+  /* todo: optimize */
+
+#define MIN_INT8 -128
+#define MAX_INT8 127
+
+  int16_t sum = (int16_t)a + (int16_t)b;
+  
+  if (sum < MIN_INT8)
+    sum = MIN_INT8;
+  else if (sum > MAX_INT8)
+    sum = MAX_INT8;
+
+  return sum;
 }
-#endif
 
 
 static void resample(int16_t* obuf, const int8_t* ibuf,
@@ -769,18 +783,32 @@ static void resample(int16_t* obuf, const int8_t* ibuf,
      ratio the resampling ratio
    */
 
+  /* todo: smoothing / averaging function */
+
+  const unsigned int step = ratio * STEREO_CHAN_COUNT;
+  unsigned int i;
+
   switch (ichan)
     {
-    case 0:
-      break;
-
-    case 1:
-      break;
-
     case 2:
+      /* unalign buffer and fallthrough */
+      ++ibuf; 
+
+    case 0:
+      for (; nsmps; --nsmps, ++ibuf, obuf += step)
+	for (i = 0; i < ratio; ++i)
+	  obuf[i] = *ibuf;
       break;
 
     case 3:
+      /* unalign buffer and fallthrough */
+      ++ibuf; 
+
+    case 1:
+      /* assume chan0 sample already stored */
+      for (; nsmps; --nsmps, ++ibuf, obuf += step)
+	for (i = 0; i < ratio; ++i)
+	  obuf[i] = mix(obuf[i], *ibuf);
       break;
     }
 }
@@ -958,9 +986,6 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
      from a mod file. name the mod filename, buffer the sample
      buffer, nsmps the sample count.
   */
-
-#define BYTES_PER_SLE16_INTERLEAVED 2
-#define STEREO_CHAN_COUNT 2
 
   memset(obuf, 0, STEREO_CHAN_COUNT * BYTES_PER_SLE16_INTERLEAVED * nsmps);
 
