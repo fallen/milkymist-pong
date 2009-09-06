@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 00:17:44 2009 texane
+** Last update Sun Sep  6 00:34:04 2009 texane
 */
 
 
@@ -676,7 +676,7 @@ int chan_produce_samples(struct chan_state* cs,
 
       /* compute freq */
 
-      freq = ;
+      freq = 0;
 
       /* handle effect */
 
