@@ -2,11 +2,12 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Wed Sep  2 19:20:16 2009 texane
-** Last update Sun Sep  6 15:14:53 2009 texane
+** Last update Sun Sep  6 17:27:55 2009 texane
 */
 
 
 
+#include <unistd.h>
 #include <stdlib.h>
 #include "pcm.h"
 #include "mod.h"
@@ -29,8 +30,22 @@ int main(int ac, char** av)
 
   pcm_alloc_buf(&pcm_buf, 48000);
 
-  while (mod_fetch(mc, pcm_get_buf_data(pcm_buf), 48000) != -1)
-    pcm_write_dev(pcm_dev, pcm_buf);
+#if 1 /* 3 second to stdout */
+  {
+    unsigned int i;
+
+    for (i = 0; i < 3; ++i)
+      {
+	mod_fetch(mc, pcm_get_buf_data(pcm_buf), 48000);
+	write(1, pcm_get_buf_data(pcm_buf), pcm_get_buf_size(pcm_buf));
+      }
+  }
+#else /* play to alsa pcm device */
+  {
+    while (mod_fetch(mc, pcm_get_buf_data(pcm_buf), 48000) != -1)
+      pcm_write_dev(pcm_dev, pcm_buf);
+  }
+#endif
 
  on_error:
 

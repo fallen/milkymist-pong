@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Fri Sep  4 10:02:42 2009 texane
-** Last update Sun Sep  6 12:39:17 2009 texane
+** Last update Sun Sep  6 17:29:13 2009 texane
 */
 
 
@@ -119,4 +119,11 @@ void pcm_free_buf(pcm_buf_t* buf)
 void* pcm_get_buf_data(pcm_buf_t* buf)
 {
   return buf->data;
+}
+
+
+size_t pcm_get_buf_size(pcm_buf_t* buf)
+{
+  /* total buf size */
+  return buf->count * PCM_BYTES_PER_SAMPLE * PCM_CHAN_COUNT;
 }

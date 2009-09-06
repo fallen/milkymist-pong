@@ -16,10 +16,10 @@
 
 # include <stdio.h>
 
-# define DEBUG_ENTER() printf("[>] %s\n", __FUNCTION__)
-# define DEBUG_LEAVE() printf("[<] %s\n", __FUNCTION__)
-# define DEBUG_PRINTF(s, ...) printf("[?] %s_%u: " s, __FUNCTION__, __LINE__, ## __VA_ARGS__)
-# define DEBUG_ERROR(s, ...) printf("[!] %s_%u: " s, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+# define DEBUG_ENTER() fprintf(stderr, "[>] %s\n", __FUNCTION__)
+# define DEBUG_LEAVE() fprintf(stderr, "[<] %s\n", __FUNCTION__)
+# define DEBUG_PRINTF(s, ...) fprintf(stderr, "[?] %s_%u: " s, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+# define DEBUG_ERROR(s, ...) fprintf(stderr, "[!] %s_%u: " s, __FUNCTION__, __LINE__, ## __VA_ARGS__)
 
 #else
 

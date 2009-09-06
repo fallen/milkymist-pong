@@ -2,13 +2,17 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Fri Sep  4 09:58:21 2009 texane
-** Last update Fri Sep  4 10:11:29 2009 texane
+** Last update Sun Sep  6 17:27:34 2009 texane
 */
 
 
 
 #ifndef PCM_H_INCLUDED
 # define PCM_H_INCLUDED
+
+
+
+#include <sys/types.h>
 
 
 
@@ -23,6 +27,7 @@ int pcm_write_dev(pcm_dev_t*, pcm_buf_t*);
 void pcm_alloc_buf(pcm_buf_t**, unsigned int);
 void pcm_free_buf(pcm_buf_t*);
 void* pcm_get_buf_data(pcm_buf_t*);
+size_t pcm_get_buf_size(pcm_buf_t*);
 
 
 
