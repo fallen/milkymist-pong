@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Fri Sep  4 10:39:51 2009 texane
-** Last update Fri Sep  4 12:46:23 2009 texane
+** Last update Sun Sep  6 15:08:58 2009 texane
 */
 
 
@@ -86,7 +86,7 @@ int file_open(file_context_t* fc, const char* path)
   {
     fc->fd = fd;
 
-    fc->data = mmap(NULL, fd, PROT_READ, MAP_PRIVATE, fd, 0);
+    fc->data = mmap(NULL, fc->size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (fc->data == MAP_FAILED)
       {
 	DEBUG_ERROR("mmap() == %d\n", errno);

@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 14:52:13 2009 texane
+** Last update Sun Sep  6 15:09:30 2009 texane
 */
 
 
@@ -387,7 +387,7 @@ static int load_file(mod_context_t* mc)
 
   for (ismp = 0; ismp < 31; ++ismp)
     {
-      /* todo: check for addition underflow */
+      /* todo: check for addition sum overflows */
       mc->sdata[ismp] = rc.pos + size;
       size += get_sample_length(mc, ismp);
     }
