@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 15:18:26 2009 texane
+** Last update Sun Sep  6 17:52:36 2009 texane
 */
 
 
@@ -1051,8 +1051,16 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 
   chan_produce_samples(&mc->cstates[0], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[1], mc, obuf, nsmps);
+#if 0
   chan_produce_samples(&mc->cstates[2], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[3], mc, obuf, nsmps);
+#else
+  {
+    int16_t* p;
+    for (p = (int16_t*)obuf + 1; nsmps; --nsmps, p += 2)
+      *p = *(p - 1);
+  }
+#endif
 
   return 0;
 }
