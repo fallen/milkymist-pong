@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 15:09:30 2009 texane
+** Last update Sun Sep  6 15:18:26 2009 texane
 */
 
 
@@ -867,8 +867,6 @@ int chan_produce_samples(struct chan_state* cs,
   unsigned int period;
   unsigned int fx;
 
-  DEBUG_ENTER();
-
  produce_more_samples:
 
   /* extract channel data */
@@ -963,6 +961,11 @@ int chan_produce_samples(struct chan_state* cs,
 
       /* how much can we produce at 48khz */
 
+      /* to remove. when only 2 chans, this is set
+	 to 0 but it should be detected earlier
+      */
+      if (!cs->smprate) return 0;
+
       nsmps_at_48khz =
 	nsmps_from_smprate_to_48khz(nsmps_at_smprate, cs->smprate);
 
@@ -987,8 +990,6 @@ int chan_produce_samples(struct chan_state* cs,
 
       cs->smpoff += nsmps_at_smprate;
     }
-
-  DEBUG_LEAVE();
 
   return 0;
 }

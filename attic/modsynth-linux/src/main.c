@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Wed Sep  2 19:20:16 2009 texane
-** Last update Sat Sep  5 17:14:35 2009 texane
+** Last update Sun Sep  6 15:14:53 2009 texane
 */
 
 
@@ -30,7 +30,7 @@ int main(int ac, char** av)
   pcm_alloc_buf(&pcm_buf, 48000);
 
   while (mod_fetch(mc, pcm_get_buf_data(pcm_buf), 48000) != -1)
-    /* pcm_write_dev(pcm_dev, pcm_buf); */ ;
+    pcm_write_dev(pcm_dev, pcm_buf);
 
  on_error:
 
