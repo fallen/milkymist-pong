@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sat Sep  5 22:17:06 2009 texane
+** Last update Sun Sep  6 00:17:44 2009 texane
 */
 
 
@@ -51,6 +51,15 @@ struct chan_state
 
   /* offset in the sample in bytes */
   unsigned int smpoff;
+
+  /* chan flags */
+#define CHAN_FLAG_IS_SAMPLE_STARTING (1 << 0)
+#define CHAN_FLAG_IS_SAMPLE_REPEATING (1 << 1)
+#define CHAN_SET_FLAG(C, F) do { (C)->flags |= CHAN_FLAG_ ## F; } while (0)
+#define CHAN_CLEAR_FLAG(C, F) do { (C)->flags &= ~CHAN_FLAG_ ## F; } while (0)
+#define CHAN_HAS_FLAG(C, F) ((C)->flags & (CHAN_FLAG_ ## F))
+#define CHAN_CLEAR_FLAGS(C) do { (C)->flags = 0; } while (0)
+  unsigned int flags;
 
   /* struct sstream* ss; */
 };
@@ -151,10 +160,10 @@ struct sample_desc
 {
   uint8_t name[22];
   uint16_t length;
-  uint8_t finetune;
+  int8_t finetune;
   uint8_t volume;
   uint16_t roff; /* repeat from this offset in the sample */
-  uint16_t rcount; /* repeat rcount times  */
+  uint16_t rlength; /* repeat rcount times  */
 } __attribute__((packed));
 
 
@@ -184,6 +193,37 @@ static inline unsigned int get_sample_length(const mod_context_t* mc,
 					     unsigned int ismp)
 {
   return get_sdesc_length(get_sample_desc(mc, ismp));
+}
+
+
+static inline unsigned int get_sample_volume(const mod_context_t* mc,
+					     unsigned int ismp)
+{
+  return get_sample_desc(mc, ismp)->volume;
+}
+
+
+static inline int get_sample_finetune(const mod_context_t* mc,
+				      unsigned int ismp)
+{
+  const int finetune = get_sample_desc(mc, ismp)->finetune & 0x0f;
+  return finetune & 0x8 ? -((finetune & 0x7) + 1) : finetune & 0x7;
+}
+
+
+static unsigned int get_sample_repeat_offset(const mod_context_t* mc,
+					     unsigned int ismp)
+{
+  /* stored in words */
+  return be16_to_host(&get_sample_desc(mc, ismp)->roff) * 2;
+}
+
+
+static unsigned int get_sample_repeat_length(const mod_context_t* mc,
+					     unsigned int ismp)
+{
+  /* stored in words */
+  return be16_to_host(&get_sample_desc(mc, ismp)->rlength) * 2;
 }
 
 
@@ -235,6 +275,8 @@ static int load_file(mod_context_t* mc)
     }
 
   mc->sdescs = (const struct sample_desc*)rc.pos;
+
+  /* todo: check descs (length, offset...) */
 
   reader_skip_safe(&rc, 31 * sizeof(struct sample_desc));
 
@@ -598,6 +640,8 @@ static inline void chan_init_state(struct chan_state* cs,
 
   cs->ichan = ichan;
   cs->ipat = ipat;
+
+  CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
 }
 
 
@@ -621,49 +665,55 @@ int chan_produce_samples(struct chan_state* cs,
   period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
   fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
 
-  /* old one if 0. samples are 1 based, not 0, so decrease. */
-
-  if (ismp)
+  if (CHAN_HAS_FLAG(cs, IS_SAMPLE_STARTING))
     {
-      ismp -= 1;
-      cs->ismp = ismp;
-    }
-  else
-    {
-      ismp = cs->ismp;
-    }
+      CHAN_CLEAR_FLAG(cs, IS_SAMPLE_STARTING);
 
-  /* next division on end of sample */
+      /* samples are 1 based, so decrement */
 
-  if (cs->smpoff >= get_sample_length(mc, ismp))
-    {
-      cs->smpoff = 0;
+      if (ismp)
+	cs->ismp = ismp - 1;
 
-      /* next pattern on end of division */
-
-      if ((++cs->idiv) >= DIVS_PER_PAT)
-	{
-	  cs->idiv = 0;
-
-	  if ((++cs->ipat) >= mc->npats)
-	    {
-	      /* replay */
-
-	      cs->ipat = 0;
-	    }
-	}
-    }
-
-  /* beginning of a sample */
-
-  if (cs->smpoff == 0)
-    {
       /* compute freq */
+
+      freq = ;
 
       /* handle effect */
 
       fx_apply(mc, cs, fx);
     }
+  else if (CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING))
+    {
+      if (cs->smpoff >= get_sample_repeat_length(mc, ismp))
+	cs->smpoff = get_sample_repeat_offset(mc, ismp);
+    }
+  else if (cs->smpoff >= get_sample_length(mc, ismp))
+    {
+      /* repeating sample */
+
+      if (get_sample_repeat_length(mc, ismp))
+	{
+	  CHAN_SET_FLAG(cs, IS_SAMPLE_REPEATING);
+	  cs->smpoff = get_sample_repeat_offset(mc, ismp);
+	}
+      else
+	{
+	  CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
+
+	  cs->smpoff = 0;
+
+	  /* next pattern on end of division */
+
+	  if ((++cs->idiv) >= DIVS_PER_PAT)
+	    {
+	      cs->idiv = 0;
+
+	      if ((++cs->ipat) >= mc->npats)
+		cs->ipat = 0;
+	    }
+	}
+    }
+
 
   /* play the sample */
   {
