@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Sun Sep  6 19:15:05 2009 texane
+** Last update Mon Sep  7 10:56:28 2009 texane
 */
 
 
@@ -245,22 +245,19 @@ static unsigned int get_sample_repeat_length(const mod_context_t* mc,
 }
 
 
-static inline const void* get_pat_div_chan(const mod_context_t* mc,
-					   unsigned int ipat,
-					   unsigned int idiv,
-					   unsigned int ichan)
+static inline const void* get_chan_data(const mod_context_t* mc, const struct chan_state* cs)
 {
 #define DIVS_PER_PAT 64
 #define CHANS_PER_DIV 4
 #define BYTES_PER_CHAN 4
 #define BYTES_PER_DIV (CHANS_PER_DIV * BYTES_PER_CHAN)
-#define BYTES_PER_PAT (DIVS_PER_PAT * CHANS_PER_DIV * BYTES_PER_CHAN) /* 1024 */
+#define BYTES_PER_PAT (DIVS_PER_PAT * BYTES_PER_DIV) /* 1024 */
 
   return
     (const unsigned char*)mc->pdata +
-    ipat * BYTES_PER_PAT +
-    idiv * BYTES_PER_DIV +
-    ichan * BYTES_PER_CHAN;
+    cs->ipat * BYTES_PER_PAT +
+    cs->idiv * BYTES_PER_DIV +
+    cs->ichan * BYTES_PER_CHAN;
 }
 
 
@@ -445,10 +442,18 @@ static void fx_do_set_sample_offset(mod_context_t* mc,
   if (smpoff >= (get_sample_length(mc, cs->ismp) - 1))
     {
       DEBUG_ERROR("smpoff >= length\n");
-      return ;
+      smpoff = 0;
     }
 
   cs->smpoff = smpoff;
+}
+
+
+static void fx_do_volume_slide(mod_context_t* mc,
+			       struct chan_state* cs,
+			       unsigned int fx)
+{
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
 }
 
 
@@ -470,9 +475,11 @@ static void fx_do_set_volume(mod_context_t* mc,
 {
   /* legal volumes from 0 to 64 */
 
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
-
   cs->vol = fx_get_first_param(fx) * 16 + fx_get_second_param(fx);
+  if (cs->vol >= 64)
+    cs->vol = 64;
+
+  DEBUG_PRINTF("(%u)\n", cs->vol);
 }
 
 
@@ -529,7 +536,7 @@ static const struct fx_pair base_fxs[] =
     { fx_do_unknown, "" },
     { fx_do_unknown, "" },
     { fx_do_set_sample_offset, "set sample offset" },
-    { fx_do_unknown, "" },
+    { fx_do_volume_slide, "volume slide" },
     { fx_do_position_jump, "position jump" },
     { fx_do_set_volume, "set volume" },
     { fx_do_pattern_break, "pattern break" },
@@ -871,7 +878,7 @@ int chan_produce_samples(struct chan_state* cs,
 
   /* extract channel data */
 
-  chan_data = get_pat_div_chan(mc, cs->ipat, cs->idiv, cs->ichan);
+  chan_data = get_chan_data(mc, cs);
 
   period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
   fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
@@ -893,6 +900,14 @@ int chan_produce_samples(struct chan_state* cs,
 
       if (ismp)
 	cs->ismp = ismp - 1;
+
+      {
+	DEBUG_PRINTF("newSample: [%u, %u, %u] {%u, %u, %u}\n",
+		     cs->ipat, cs->idiv, cs->ismp,
+		     get_sample_length(mc, cs->ismp),
+		     get_sample_repeat_offset(mc, cs->ismp),
+		     get_sample_repeat_length(mc, cs->ismp));
+      }
 
       /* sample volume */
 
@@ -968,13 +983,13 @@ int chan_produce_samples(struct chan_state* cs,
       if (is_end_of_sample(mc, cs, cs->ismp))
 	goto produce_more_samples;
 
-      /* how much can we produce at 48khz */
-
       /* to remove. when only 2 chans, this is set
 	 to 0 but it should be detected earlier
       */
       if (!cs->smprate)
 	return 0;
+
+      /* how much can we produce at 48khz */
 
       nsmps_at_48khz =
 	nsmps_from_smprate_to_48khz(nsmps_at_smprate, cs->smprate);
@@ -992,7 +1007,7 @@ int chan_produce_samples(struct chan_state* cs,
       ratio =
 	compute_resampling_ratio(nsmps_at_48khz, nsmps_at_smprate);
 
-      DEBUG_PRINTF("producing: %u, %u %u\n", cs->ichan, nsmps_at_48khz, ratio);
+      DEBUG_PRINTF("{%u, %u}: %u - %u - %x\n", cs->ismp, cs->smpoff, ratio, cs->smprate, cs->flags);
 
       obuf =
 	resample(obuf, get_chan_sample_data(mc, cs),
@@ -1065,14 +1080,6 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
   chan_produce_samples(&mc->cstates[1], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[2], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[3], mc, obuf, nsmps);
-
-#if 1 /* shift channels since appears to be 0 */
-  {
-    int16_t* p;
-    for (p = (int16_t*)obuf + 1; nsmps; --nsmps, p += 2)
-      *p = *(p - 1);
-  }
-#endif
 
   return 0;
 }
