@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Mon Sep  7 10:56:28 2009 texane
+** Last update Mon Sep  7 14:20:59 2009 texane
 */
 
 
@@ -771,7 +771,7 @@ static inline const void* get_chan_sample_data(const mod_context_t* mc,
 static unsigned int compute_resampling_ratio(unsigned int nsmps_at_48khz,
 					     unsigned int nsmps_at_smprate)
 {
-  /* todo */
+  /* todo: round to the nearest ratio */
 
   const unsigned int ratio = nsmps_at_48khz / nsmps_at_smprate;
   return ratio ? ratio : 1;
@@ -782,15 +782,19 @@ static int16_t mix(int8_t a, int8_t b)
 {
   /* todo: optimize */
 
+  int16_t sum = (int16_t)a + (int16_t)b;
+
+#if 0
+  {
 #define MIN_INT8 -128
 #define MAX_INT8 127
 
-  int16_t sum = (int16_t)a + (int16_t)b;
-  
   if (sum < MIN_INT8)
     sum = MIN_INT8;
   else if (sum > MAX_INT8)
     sum = MAX_INT8;
+  }
+#endif
 
   return sum;
 }
@@ -810,16 +814,19 @@ resample(int16_t* obuf, const int8_t* ibuf,
 
   /* todo: smoothing / averaging function */
 
+#if 0
+
   size_t roff = 0;
   unsigned int i;
 
+  ibuf += ichan;
+
   switch (ichan)
     {
-    case 2:
+    case 1:
       /* unalign buffers and fallthrough (dont break) */
       roff = 1;
       ++obuf;
-      ibuf += 2;
 
     case 0:
       for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
@@ -827,15 +834,12 @@ resample(int16_t* obuf, const int8_t* ibuf,
 	  *obuf = *ibuf;
       break;
 
-    case 3:
+    case 2:
       /* unalign buffers and fallthrough (dont break) */
       roff = 1;
       ++obuf;
-      ibuf += 2;
 
-    case 1:
-      ++ibuf;
-
+    case 3:
       /* assume chan0 sample already stored */
       for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
 	for (i = 0; i < ratio; ++i, obuf += STEREO_CHAN_COUNT)
@@ -844,6 +848,44 @@ resample(int16_t* obuf, const int8_t* ibuf,
     }
 
   return obuf - roff;
+
+#else /* 4tracks -> mono -> stereo */
+
+  /* use the output buffer as a temporary one
+     to store 8bits pcm samples. when chan 3,
+     mix all the previously stored samples.
+   */
+
+  int16_t* p = obuf;
+  unsigned int i;
+
+  obuf += ichan;
+
+  for (obuf += ichan; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
+    for (i = 0; i < ratio; ++i, obuf += STEREO_CHAN_COUNT)
+      *obuf = *ibuf;
+
+  obuf -= ichan;
+
+  if (ichan == 3)
+    {
+      /* mix */
+
+      for (; p < obuf; p += STEREO_CHAN_COUNT)
+	{
+	  const int8_t* const q = (const int8_t*)p;
+	  p[0] = p[1] =
+	    (int16_t)
+	    ((int32_t)q[0] +
+	     (int32_t)q[1] +
+	     (int32_t)q[2] +
+	     (int32_t)q[3]);
+	}
+    }
+
+  return obuf;
+
+#endif
 }
 
 
@@ -870,24 +912,24 @@ int chan_produce_samples(struct chan_state* cs,
 {
   /* produce nsmps 48khz samples */
 
-  const unsigned char* chan_data;
-  unsigned int period;
-  unsigned int fx;
-
  produce_more_samples:
-
-  /* extract channel data */
-
-  chan_data = get_chan_data(mc, cs);
-
-  period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
-  fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
 
   /* reposition */
 
   if (CHAN_HAS_FLAG(cs, IS_SAMPLE_STARTING))
     {
-      const unsigned int ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
+      const unsigned char* chan_data;
+      unsigned int ismp;
+      unsigned int period;
+      unsigned int fx;
+
+      /* extract channel data */
+
+      chan_data = get_chan_data(mc, cs);
+
+      ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
+      period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
+      fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
 
       /* todo: is this necessary */
 
@@ -902,8 +944,8 @@ int chan_produce_samples(struct chan_state* cs,
 	cs->ismp = ismp - 1;
 
       {
-	DEBUG_PRINTF("newSample: [%u, %u, %u] {%u, %u, %u}\n",
-		     cs->ipat, cs->idiv, cs->ismp,
+	DEBUG_PRINTF("newSample: [%u, %u, %u, %u] {%u, %u, %u}\n",
+		     cs->ichan, cs->ipat, cs->idiv, cs->ismp,
 		     get_sample_length(mc, cs->ismp),
 		     get_sample_repeat_offset(mc, cs->ismp),
 		     get_sample_repeat_length(mc, cs->ismp));
@@ -1015,7 +1057,7 @@ int chan_produce_samples(struct chan_state* cs,
 
       nsmps -= nsmps_at_48khz;
 
-      cs->smpoff += nsmps_at_smprate;
+      cs->smpoff += nsmps_at_smprate * MOD_CHAN_COUNT;
     }
 
   return 0;
