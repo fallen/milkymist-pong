@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Wed Sep  2 19:20:16 2009 texane
-** Last update Mon Sep  7 14:14:24 2009 texane
+** Last update Mon Sep  7 16:49:20 2009 texane
 */
 
 
@@ -22,7 +22,7 @@ int main(int ac, char** av)
   pcm_buf_t* pcm_buf = NULL;
   mod_context_t* mc = NULL;
 
-  if (mod_load_file(&mc, "../data/4.mod") == -1)
+  if (mod_load_file(&mc, "../data/3.mod") == -1)
     goto on_error;
 
   if (pcm_open_dev(&pcm_dev) == -1)

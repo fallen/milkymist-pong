@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Mon Sep  7 14:32:17 2009 texane
+** Last update Mon Sep  7 16:24:12 2009 texane
 */
 
 
@@ -800,6 +800,23 @@ static int16_t mix(int8_t a, int8_t b)
 }
 
 
+static void mix_8bits_4chans_buffer(int8_t* ibuf, unsigned int nsmps)
+{
+  /* todo: must be moved in the resample routine. */
+
+  for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
+    {
+      int16_t* const p = (int16_t*)ibuf;
+
+      p[0] = p[1] =
+	(int16_t)((int32_t)ibuf[0] +
+		  (int32_t)ibuf[1] +
+		  (int32_t)ibuf[2] +
+		  (int32_t)ibuf[3]);
+    }
+}
+
+
 static void*
 resample(int16_t* obuf, const int8_t* ibuf,
 	 unsigned int nsmps,
@@ -856,7 +873,6 @@ resample(int16_t* obuf, const int8_t* ibuf,
      mix all the previously stored samples.
    */
 
-  int16_t* p = obuf;
   unsigned int i;
 
   obuf += ichan;
@@ -866,22 +882,6 @@ resample(int16_t* obuf, const int8_t* ibuf,
       *obuf = *ibuf;
 
   obuf -= ichan;
-
-  if (ichan == 3)
-    {
-      /* mix */
-
-      for (; p < obuf; p += STEREO_CHAN_COUNT)
-	{
-	  const int8_t* const q = (const int8_t*)p;
-	  p[0] = p[1] =
-	    (int16_t)
-	    ((int32_t)q[0] +
-	     (int32_t)q[1] +
-	     (int32_t)q[2] +
-	     (int32_t)q[3]);
-	}
-    }
 
   return obuf;
 
@@ -1049,7 +1049,7 @@ int chan_produce_samples(struct chan_state* cs,
       ratio =
 	compute_resampling_ratio(nsmps_at_48khz, nsmps_at_smprate);
 
-      DEBUG_PRINTF("{%u, %u}: %u - %u - %x\n", cs->ismp, cs->smpoff, ratio, cs->smprate, cs->flags);
+      DEBUG_PRINTF("{%u, %u}: %u - %u - %x\n", cs->ismp, cs->smpoff, nsmps_at_48khz, cs->smprate, cs->flags);
 
       obuf =
 	resample(obuf, get_chan_sample_data(mc, cs),
@@ -1074,16 +1074,10 @@ int mod_load_file(mod_context_t** mc, const char* path)
     return -1;
 
   if (file_open(&(*mc)->fc, path) == -1)
-    {
-      DEBUG_ERROR("file_open() == -1\n");
-      goto on_open_error;
-    }
+    goto on_open_error;
 
   if (load_file(*mc) == -1)
-    {
-      DEBUG_ERROR("load_file() == -1\n");
-      goto on_error;
-    }
+    goto on_error;
 
   chan_init_state(&(*mc)->cstates[0], 0, (*mc)->ipat);
   chan_init_state(&(*mc)->cstates[1], 1, (*mc)->ipat);
@@ -1122,6 +1116,8 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
   chan_produce_samples(&mc->cstates[1], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[2], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[3], mc, obuf, nsmps);
+
+  mix_8bits_4chans_buffer(obuf, nsmps);
 
   return 0;
 }

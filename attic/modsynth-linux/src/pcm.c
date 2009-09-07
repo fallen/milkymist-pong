@@ -2,14 +2,14 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Fri Sep  4 10:02:42 2009 texane
-** Last update Sun Sep  6 17:57:38 2009 texane
+** Last update Mon Sep  7 16:53:02 2009 texane
 */
 
 
 
 #include <stddef.h>
 #include <stdlib.h>
-#include <alsa/asoundlib.h>
+/* #include <alsa/asoundlib.h> */
 #include "pcm.h"
 
 
@@ -18,7 +18,11 @@
 
 struct pcm_dev
 {
+#if 0
   snd_pcm_t* handle;
+#else
+  unsigned int dummy;
+#endif
 };
 
 
@@ -43,6 +47,8 @@ struct pcm_buf
 
 int pcm_open_dev(pcm_dev_t** dev)
 {
+#if 0
+
   snd_pcm_t* handle = NULL;
   snd_pcm_hw_params_t* params;
   snd_pcm_uframes_t frames;
@@ -77,11 +83,21 @@ int pcm_open_dev(pcm_dev_t** dev)
  on_error:
 
   return -1;
+
+#else
+
+  *dev = NULL;
+
+  return 0;
+
+#endif
 }
 
 
 void pcm_close_dev(pcm_dev_t* dev)
 {
+#if 0
+
   if (dev->handle != NULL)
     {
       snd_pcm_drain(dev->handle);
@@ -89,12 +105,18 @@ void pcm_close_dev(pcm_dev_t* dev)
     }
 
   free(dev);
+
+#endif
 }
 
 
 int pcm_write_dev(pcm_dev_t* dev, pcm_buf_t* buf)
 {
+#if 0
   return snd_pcm_writei(dev->handle, buf->data, buf->count);
+#else
+  return 0;
+#endif
 }
 
 
