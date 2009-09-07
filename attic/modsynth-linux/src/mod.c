@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Mon Sep  7 16:24:12 2009 texane
+** Last update Mon Sep  7 20:29:44 2009 texane
 */
 
 
@@ -354,30 +354,6 @@ static int load_file(mod_context_t* mc)
 
   reader_skip_safe(&rc, npats * BYTES_PER_PAT);
 
-#if 0
-    unsigned int ipat;
-    unsigned int ichan;
-    unsigned int idiv;
-
-    for (ipat = 0; ipat < npats; ++ipat)
-      for (idiv = 0; idiv < DIVS_PER_PAT; ++idiv)
-	for (ichan = 0; ichan < CHANS_PER_DIV; ++ichan)
-	  {
-	    const uint8_t sample = (rc.pos[0] & 0xf0) | (rc.pos[2] >> 4);
-	    const uint16_t period = ((uint16_t)(rc.pos[0] & 0x0f) << 8) | rc.pos[1];
-	    const uint16_t effect = ((uint16_t)(rc.pos[2] & 0x0f) << 8) | rc.pos[3];
-
-	    if (idiv == 0)
-	      printf("fx: %u, period: %u\n", (effect & 0xf0) >> 4, period);
-
-	    /* 4 bytes per div/chan */
-	    if (reader_skip_safe(&rc, 4) == -1)
-	      goto on_error;
-
-	    /* printf("p: %u, div: %u, chan: %u, sample: 0x%02x, fx: 0x%02x\n", ipat, idiv, ichan, sample, effect); */
-	  }
-#endif
-
   /* sample data. build sdata lookup table. */
 
   size = 0;
@@ -393,7 +369,7 @@ static int load_file(mod_context_t* mc)
 
   if (reader_check_size(&rc, size) == -1)
     {
-      DEBUG_ERROR("reader_check_size()\n");
+      DEBUG_ERROR("reader_check_size(%u, %u)\n", size, rc.size);
       goto on_error;
     }
 
@@ -1088,10 +1064,12 @@ int mod_load_file(mod_context_t** mc, const char* path)
 
  on_open_error:
   free(*mc);
+  *mc = NULL;
   return -1;
 
  on_error:
   mod_destroy(*mc);
+  *mc = NULL;
   return -1;
 }
 
