@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Mon Sep  7 20:29:44 2009 texane
+** Last update Tue Sep  8 08:15:01 2009 texane
 */
 
 
@@ -36,6 +36,57 @@ typedef /* signed */ int int32_t;
 #endif
 
 
+
+struct fx_state
+{
+#define FX_ID_ARPEGGIO 0
+#define FX_ID_SLIDE_UP 1
+#define FX_ID_SLIDE_DOWN 2
+#define FX_ID_SLIDE_TO_NOTE 3
+#define FX_ID_VIBRATO 4
+#define FX_ID_CONT_SLIDE_TO_NOTE_AND_DO_VOL_SLIDE 5
+#define FX_ID_CONT_VIBRATO_AND_DO_VOL_SLIDE 6
+#define FX_ID_TREMOLO 7
+#define FX_ID_UNUSED 8
+#define FX_ID_SET_SAMPLE_OFFSET 9
+#define FX_ID_VOLUME_SLIDE 10
+#define FX_ID_POS_JUMP 11
+#define FX_ID_SET_VOLUME 12
+#define FX_ID_PATTERN_BREAK 13
+#define FX_ID_EXTENDED 14
+#define FX_ID_SET_SPEED 15
+
+#define FX_XID_SET_FILTER 0
+#define FX_XID_FINESLIDE_UP 1
+#define FX_XID_FINESLIDE_DOWN 2
+#define FX_XID_SET_GLISSANDO 3
+#define FX_XID_SET_VIBRATO_WAVEFORM 4
+#define FX_XID_SET_FINETUNE_VALUE 5
+#define FX_XID_LOOP_PATTERN 6
+#define FX_XID_SET_TREMOLO_WAVEFORM 7
+#define FX_XID_UNUSED 8
+#define FX_XID_RERTRIGGER_SAMPLE 9
+#define FX_XID_FINE_VOLUME_SLIDE_UP 10
+#define FX_XID_FINE_VOLUME_SLIDE_DOWN 11
+#define FX_XID_CUT_SAMPLE 12
+#define FX_XID_DELAY_SAMPLE 13
+#define FX_XID_DELAY_PATTERN 14
+#define FX_XID_INVERT_LOOP 15
+
+  unsigned int fx;
+
+  union
+  {
+    struct
+    {
+      unsigned int noff; /* note offset */
+    } arpeggio;
+
+  } u;
+
+};
+
+
 struct chan_state
 {
   unsigned int ichan;
@@ -64,8 +115,12 @@ struct chan_state
 #define CHAN_CLEAR_FLAGS(C) do { (C)->flags = 0; } while (0)
   unsigned int flags;
 
-  /* struct sstream* ss; */
+  /* effect data and state */
+  unsigned int fx_data;
+  struct fx_state fx_state;
 };
+
+typedef struct chan_state chan_state_t;
 
 
 struct mod_context
@@ -381,8 +436,17 @@ static int load_file(mod_context_t* mc)
 }
 
 
-/* fx handling */
+/* fx handling. the idea is to have 2 functions per
+   effect: init and apply. at the very beginning of a
+   pattern division, the effect gets a chance of
+   initializing whatever it needs by the corresponding
+   init routine being called. then the apply routine
+   gets called every time until the division is done.
+   there are both fx state and data per channel.
+ */
 
+
+/* helper routines */
 
 static inline unsigned int fx_get_first_param(unsigned int fx)
 {
@@ -396,21 +460,103 @@ static inline unsigned int fx_get_second_param(unsigned int fx)
 }
 
 
-static void fx_do_arpeggio(mod_context_t* mc,
-			   struct chan_state* cs,
-			   unsigned int fx)
+static inline unsigned int fx_get_byte_param(unsigned int fx)
 {
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
+  /* (fx_get_first_param() * 16 + fx_get_second_param() */
+
+  return fx & 0xff;
 }
 
 
-static void fx_do_set_sample_offset(mod_context_t* mc,
-				    struct chan_state* cs,
-				    unsigned int fx)
+/* arpeggio */
+
+static void
+fx_init_arpeggio(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->fx_data),
+	       fx_get_second_param(cs->fx_data));
+}
+
+
+static void
+fx_apply_arpeggio(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* slide up */
+
+static void
+fx_init_slide_up(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+static void
+fx_apply_slide_up(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* slide down */
+
+static void
+fx_init_slide_down(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+static void
+fx_apply_slide_down(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* slide to note */
+
+static void
+fx_init_slide_to_note(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+static void
+fx_apply_slide_to_note(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* vibrato */
+
+static void
+fx_init_vibrato(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+static void
+fx_apply_vibrato(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* set sample offset */
+
+static void
+fx_init_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
   unsigned int smpoff =
-    fx_get_first_param(fx) * 4096 +
-    fx_get_second_param(fx) * 256 *
+    fx_get_first_param(cs->fx_data) * 4096 +
+    fx_get_second_param(cs->fx_data) * 256 *
     BYTES_PER_WORD;
 
   DEBUG_PRINTF("(%x)\n", smpoff);
@@ -425,264 +571,230 @@ static void fx_do_set_sample_offset(mod_context_t* mc,
 }
 
 
-static void fx_do_volume_slide(mod_context_t* mc,
-			       struct chan_state* cs,
-			       unsigned int fx)
+static void
+fx_apply_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
+  DEBUG_ENTER();
 }
 
 
-static void fx_do_position_jump(mod_context_t* mc,
-				struct chan_state* cs,
-				unsigned int fx)
+/* volume slide */
+
+static void
+fx_init_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->fx_data),
+	       fx_get_second_param(cs->fx_data));
+}
+
+
+static void
+fx_apply_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* position jump */
+
+static void
+fx_init_position_jump(mod_context_t* mc, chan_state_t* cs)
 {
   /* continue at song position */
-  
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));  
 
-  cs->ipat = mc->song_pos[(fx_get_first_param(fx) * 16 + fx_get_second_param(fx)) & 0x7f];
+  const unsigned int pos = fx_get_byte_param(cs->fx_data);
+  
+  DEBUG_PRINTF("(%x)\n", pos);
+
+  cs->ipat = mc->song_pos[pos & 0x7f];
 }
 
 
-static void fx_do_set_volume(mod_context_t* mc,
-			     struct chan_state* cs,
-			     unsigned int fx)
+static void
+fx_apply_position_jump(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* set volume */
+
+static void
+fx_init_set_volume(mod_context_t* mc, chan_state_t* cs)
 {
   /* legal volumes from 0 to 64 */
 
-  cs->vol = fx_get_first_param(fx) * 16 + fx_get_second_param(fx);
-  if (cs->vol >= 64)
-    cs->vol = 64;
+  cs->vol = fx_get_byte_param(cs->fx_data);
 
   DEBUG_PRINTF("(%u)\n", cs->vol);
+
+  if (cs->vol >= 64)
+    cs->vol = 64;
 }
 
 
-static void fx_do_pattern_break(mod_context_t* mc,
-				struct chan_state* cs,
-				unsigned int fx)
+static void
+fx_apply_set_volume(mod_context_t* mc, chan_state_t* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* pattern break */
+
+static void
+fx_init_pattern_break(mod_context_t* mc, chan_state_t* cs)
 {
   /* continue at next pattern, new division */
 
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
-
   cs->ipat += 1;
-  cs->idiv = (fx_get_first_param(fx) * 10 + fx_get_second_param(fx)) & 0x3f;
+
+  cs->idiv =
+    (fx_get_first_param(cs->fx_data) * 10 +
+     fx_get_second_param(cs->fx_data)) &
+    0x3f;
+
+  DEBUG_PRINTF("(%x)\n", cs->idiv);
 }
 
 
-static void fx_do_set_speed(mod_context_t* mc,
-			    struct chan_state* cs,
-			    unsigned int fx)
+static void
+fx_apply_pattern_break(mod_context_t* mc, chan_state_t* cs)
 {
-  unsigned int speed = fx_get_first_param(fx) * 16 + fx_get_second_param(fx);
+  DEBUG_ENTER();
+}
 
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(fx), fx_get_second_param(fx));
+
+/* set speed */
+
+static void
+fx_init_set_speed(mod_context_t* mc, chan_state_t* cs)
+{
+  unsigned int speed = fx_get_byte_param(cs->fx_data);
+
+  DEBUG_PRINTF("(%x)\n", speed);
 
   if (speed == 0)
     speed = 1;
 }
 
 
-static void fx_do_unknown(mod_context_t* mc,
-			  struct chan_state* cs,
-			  unsigned int fx)
+static void
+fx_apply_set_speed(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_PRINTF("unknown fx(0x%03x)\n", fx);
+  DEBUG_ENTER();
 }
 
 
-struct fx_pair
+/* unknown effect */
+
+static void fx_init_unknown(mod_context_t* mc, struct chan_state* cs)
 {
-  void (*fn)(mod_context_t*, struct chan_state*, unsigned int);
+  DEBUG_PRINTF("unknown fx(0x%03x)\n", cs->fx_data);
+}
+
+
+static void fx_apply_unknown(mod_context_t* mc, struct chan_state* cs)
+{
+  DEBUG_ENTER();
+}
+
+
+/* effect dispatching tables */
+
+struct fx_info
+{
   const char* name;
+  void (*init)(mod_context_t*, chan_state_t*);
+  void (*apply)(mod_context_t*, chan_state_t*);
 };
 
 
-static const struct fx_pair base_fxs[] =
+static const struct fx_info fx_table[] =
   {
-    { fx_do_arpeggio, "arpeggio" },
-    { fx_do_unknown, "slide up" },
-    { fx_do_unknown, "slide down" },
-    { fx_do_unknown, "slide to node" },
-    { fx_do_unknown, "vibrato" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_set_sample_offset, "set sample offset" },
-    { fx_do_volume_slide, "volume slide" },
-    { fx_do_position_jump, "position jump" },
-    { fx_do_set_volume, "set volume" },
-    { fx_do_pattern_break, "pattern break" },
-    { fx_do_unknown, "" },
-    { fx_do_set_speed, "set speed" }
+#define EXPAND_FX_INFO_ENTRY(S) { #S, fx_init_ ## S, fx_apply_ ## S }
+
+    /* base effects */
+
+    EXPAND_FX_INFO_ENTRY(arpeggio),
+    EXPAND_FX_INFO_ENTRY(slide_up),
+    EXPAND_FX_INFO_ENTRY(slide_down),
+    EXPAND_FX_INFO_ENTRY(slide_to_note),
+    EXPAND_FX_INFO_ENTRY(vibrato),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(set_sample_offset),
+    EXPAND_FX_INFO_ENTRY(volume_slide),
+    EXPAND_FX_INFO_ENTRY(position_jump),
+    EXPAND_FX_INFO_ENTRY(set_volume),
+    EXPAND_FX_INFO_ENTRY(pattern_break),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(set_speed),
+
+    /* extended effects */
+
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(unknown)
   };
 
 
-static const struct fx_pair extended_fxs[] =
-  {
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" },
-    { fx_do_unknown, "" }
-  };
-
-
-static inline const char* fx_xid_to_string(unsigned int i)
+static inline unsigned int fx_get_index(unsigned int fx)
 {
+  /* get the fx table index */
 
-#if 0
-
-#define FX_XID_CASE(I) case FX_XID_ ## I: s = #I; break
-
-#define FX_XID_SET_FILTER 0
-#define FX_XID_FINESLIDE_UP 1
-#define FX_XID_FINESLIDE_DOWN 2
-#define FX_XID_SET_GLISSANDO 3
-#define FX_XID_SET_VIBRATO_WAVEFORM 4
-#define FX_XID_SET_FINETUNE_VALUE 5
-#define FX_XID_LOOP_PATTERN 6
-#define FX_XID_SET_TREMOLO_WAVEFORM 7
-#define FX_XID_UNUSED 8
-#define FX_XID_RERTRIGGER_SAMPLE 9
-#define FX_XID_FINE_VOLUME_SLIDE_UP 10
-#define FX_XID_FINE_VOLUME_SLIDE_DOWN 11
-#define FX_XID_CUT_SAMPLE 12
-#define FX_XID_DELAY_SAMPLE 13
-#define FX_XID_DELAY_PATTERN 14
-#define FX_XID_INVERT_LOOP 15
-
-  const char* s;
-
-  switch (i)
-    {
-      FX_XID_CASE(SET_FILTER);
-      FX_XID_CASE(FINESLIDE_UP);
-      FX_XID_CASE(FINESLIDE_DOWN);
-      FX_XID_CASE(SET_GLISSANDO);
-      FX_XID_CASE(SET_VIBRATO_WAVEFORM);
-      FX_XID_CASE(SET_FINETUNE_VALUE);
-      FX_XID_CASE(LOOP_PATTERN);
-      FX_XID_CASE(SET_TREMOLO_WAVEFORM);
-      FX_XID_CASE(UNUSED);
-      FX_XID_CASE(RERTRIGGER_SAMPLE);
-      FX_XID_CASE(FINE_VOLUME_SLIDE_UP);
-      FX_XID_CASE(FINE_VOLUME_SLIDE_DOWN);
-      FX_XID_CASE(CUT_SAMPLE);
-      FX_XID_CASE(DELAY_SAMPLE);
-      FX_XID_CASE(DELAY_PATTERN);
-      FX_XID_CASE(INVERT_LOOP);
-
-    default:
-      s = "unknown";
-      break;
-    }
-
-  return s;
-
-#else
-
-  return extended_fxs[i].name;
-
-#endif
-
-}
-
-
-static inline const char* fx_id_to_string(unsigned int i)
-{
-
-#if 0
-
-#define FX_ID_CASE(I) case FX_ID_ ## I: s = #I; break
-
-#define FX_ID_ARPEGGIO 0
-#define FX_ID_SLIDE_UP 1
-#define FX_ID_SLIDE_DOWN 2
-#define FX_ID_SLIDE_TO_NOTE 3
-#define FX_ID_VIBRATO 4
-#define FX_ID_CONT_SLIDE_TO_NOTE_AND_DO_VOL_SLIDE 5
-#define FX_ID_CONT_VIBRATO_AND_DO_VOL_SLIDE 6
-#define FX_ID_TREMOLO 7
-#define FX_ID_UNUSED 8
-#define FX_ID_SET_SAMPLE_OFFSET 9
-#define FX_ID_VOLUME_SLIDE 10
-#define FX_ID_POS_JUMP 11
-#define FX_ID_SET_VOLUME 12
-#define FX_ID_PATTERN_BREAK 13
-#define FX_ID_EXTENDED 14
-#define FX_ID_SET_SPEED 15
-
-  const char* s;
-
-  switch (i)
-    {
-      FX_ID_CASE(ARPEGGIO);
-      FX_ID_CASE(SLIDE_UP);
-      FX_ID_CASE(SLIDE_DOWN);
-      FX_ID_CASE(SLIDE_TO_NOTE);
-      FX_ID_CASE(VIBRATO);
-      FX_ID_CASE(CONT_SLIDE_TO_NOTE_AND_DO_VOL_SLIDE);
-      FX_ID_CASE(CONT_VIBRATO_AND_DO_VOL_SLIDE);
-      FX_ID_CASE(TREMOLO);
-      FX_ID_CASE(UNUSED);
-      FX_ID_CASE(SET_SAMPLE_OFFSET);
-      FX_ID_CASE(VOLUME_SLIDE);
-      FX_ID_CASE(POS_JUMP);
-      FX_ID_CASE(SET_VOLUME);
-      FX_ID_CASE(PATTERN_BREAK);
-      FX_ID_CASE(EXTENDED);
-      FX_ID_CASE(SET_SPEED);
-
-    default:
-      s = "unknown";
-      break;
-    }
-
-  return s;
-
-#else
-
-  return base_fxs[i].name;
-
-#endif
-
-}
-
-
-static inline void fx_apply(mod_context_t* mc,
-			    struct chan_state* cs,
-			    unsigned int fx)
-{
   const unsigned int i = (fx & 0xf00) >> 8;
 
-  if (i != 14)
-    base_fxs[i].fn(mc, cs, fx);
-  else
-    extended_fxs[(fx & 0xf0) >> 4].fn(mc, cs, fx);
+  return i != 14 ? i : fx & 0xf0;
+}
+
+
+static inline const struct fx_info* fx_get_info(unsigned int fx)
+{
+  return &fx_table[fx_get_index(fx)];
+}
+
+
+static inline const char* fx_get_name(unsigned int fx)
+{
+  return fx_get_info(fx)->name;
+}
+
+
+static inline void
+fx_init(mod_context_t* mc, chan_state_t* cs)
+{
+  fx_get_info(cs->fx_data)->init(mc, cs);
+}
+
+
+static inline void
+fx_apply(mod_context_t* mc, chan_state_t* cs)
+{
+  fx_get_info(cs->fx_data)->apply(mc, cs);
 }
 
 
 
 /* on per channel state */
 
-static inline void chan_init_state(struct chan_state* cs,
-				   unsigned int ichan,
-				   unsigned int ipat)
+static inline void
+chan_init_state(chan_state_t* cs, unsigned int ichan, unsigned int ipat)
 {
   memset(cs, 0, sizeof(struct chan_state));
 
@@ -905,7 +1017,6 @@ int chan_produce_samples(struct chan_state* cs,
 
       ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
       period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
-      fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
 
       /* todo: is this necessary */
 
@@ -939,9 +1050,9 @@ int chan_produce_samples(struct chan_state* cs,
       if (period)
 	cs->smprate = PAL_SYNC_RATE / (period * 2);
 
-      /* handle effect */
+      /* fill effect */
 
-      fx_apply(mc, cs, fx);
+      fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
     }
   else if (CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING))
     {
@@ -978,6 +1089,10 @@ int chan_produce_samples(struct chan_state* cs,
 
       goto produce_more_samples;
     }
+
+  /* handle effect */
+
+  fx_apply(mc, cs);
 
   /* generate nsmps 48khz samples */
 
