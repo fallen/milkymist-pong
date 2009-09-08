@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Tue Sep  8 08:15:01 2009 texane
+** Last update Tue Sep  8 08:28:37 2009 texane
 */
 
 
@@ -1002,14 +1002,16 @@ int chan_produce_samples(struct chan_state* cs,
 
  produce_more_samples:
 
-  /* reposition */
-
   if (CHAN_HAS_FLAG(cs, IS_SAMPLE_STARTING))
     {
+      /* this is a new sample/division. we initialize
+	 here whatever is needed to make progress in
+	 the division, esp. the per chan state.
+      */
+
       const unsigned char* chan_data;
       unsigned int ismp;
       unsigned int period;
-      unsigned int fx;
 
       /* extract channel data */
 
@@ -1050,9 +1052,10 @@ int chan_produce_samples(struct chan_state* cs,
       if (period)
 	cs->smprate = PAL_SYNC_RATE / (period * 2);
 
-      /* fill effect */
+      /* fx initialization is done here */
 
-      fx = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
+      cs->fx_data = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
+      fx_init(mc, cs);
     }
   else if (CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING))
     {
@@ -1090,7 +1093,7 @@ int chan_produce_samples(struct chan_state* cs,
       goto produce_more_samples;
     }
 
-  /* handle effect */
+  /* apply the effect. see above for initialization. */
 
   fx_apply(mc, cs);
 
