@@ -1,5 +1,5 @@
 /*
- * Milkymist VJ SoC (Software)
+ * Milkymist Democompo
  * Copyright (C) 2007, 2008, 2009 Sebastien Bourdeauducq
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -68,11 +68,13 @@ static void tmu_start(struct tmu_td *td)
 	CSR_TMU_DSTVRES = td->dstvres;
 
 	CSR_TMU_CTL = td->flags|TMU_CTL_START;
+	//printf("write %d read %d\n", td->flags|TMU_CTL_START, CSR_TMU_CTL);
 }
 
 void tmu_isr()
 {
-	queue[consume]->callback(queue[consume]);
+	if(queue[consume]->callback)
+		queue[consume]->callback(queue[consume]);
 	if(queue[consume]->profile) {
 		int pixels, clocks, misses, hits;
 
