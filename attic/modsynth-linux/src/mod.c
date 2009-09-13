@@ -485,13 +485,6 @@ fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 }
 
 
-static void
-fx_ontick_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
-}
-
-
 /* volume slide */
 
 static void
@@ -522,13 +515,6 @@ fx_ondiv_position_jump(mod_context_t* mc, chan_state_t* cs)
 }
 
 
-static void
-fx_ontick_position_jump(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
-}
-
-
 /* set volume */
 
 static void
@@ -540,13 +526,6 @@ fx_ondiv_set_volume(mod_context_t* mc, chan_state_t* cs)
 
   if (cs->volume > 64)
     cs->volume = 64;
-}
-
-
-static void
-fx_ontick_set_volume(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
 }
 
 
@@ -565,13 +544,6 @@ fx_ondiv_pattern_break(mod_context_t* mc, chan_state_t* cs)
     0x3f;
 
   mc->break_next_songpos = mc->songpos + 1;
-}
-
-
-static void
-fx_ontick_pattern_break(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
 }
 
 
@@ -594,13 +566,6 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
       mc->tickspersecond = speed * 4 * mc->ticksperdivision / 60;
       mc->samplespertick= 48000 / mc->tickspersecond;
     }
-}
-
-
-static void
-fx_ontick_set_speed(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
 }
 
 
@@ -631,6 +596,7 @@ struct fx_info
 static const struct fx_info fx_table[] =
   {
 #define EXPAND_FX_INFO_ENTRY(S) { #S, fx_ondiv_ ## S, fx_ontick_ ## S }
+#define EXPAND_FX_INFO_ENTRY_NOTICK(S) { #S, fx_ondiv_ ## S, fx_ontick_unknown }
 
     /* base effects */
 
@@ -643,13 +609,13 @@ static const struct fx_info fx_table[] =
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(set_sample_offset),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_sample_offset),
     EXPAND_FX_INFO_ENTRY(volume_slide),
-    EXPAND_FX_INFO_ENTRY(position_jump),
-    EXPAND_FX_INFO_ENTRY(set_volume),
-    EXPAND_FX_INFO_ENTRY(pattern_break),
+    EXPAND_FX_INFO_ENTRY_NOTICK(position_jump),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_volume),
+    EXPAND_FX_INFO_ENTRY_NOTICK(pattern_break),
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(set_speed),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_speed),
 
     /* extended effects */
 
@@ -677,8 +643,8 @@ static inline unsigned int fx_get_index(uint32_t fx)
   /* get the fx table index */
 
   const unsigned int i = (fx & 0xf00) >> 8;
-
-  return i != 14 ? i : fx & 0xf0;
+  
+  return i != 14 ? i : ((fx & 0xf0) >> 4) + 0x10;
 }
 
 
