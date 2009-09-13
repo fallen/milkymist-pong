@@ -1,16 +1,16 @@
 /*
  * Milkymist Democompo
  * Copyright (C) 2007, 2008, 2009 Sebastien Bourdeauducq
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, version 3 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -30,8 +30,8 @@ static unsigned short int framebufferA[640*480] __attribute__((aligned(32)));
 static unsigned short int framebufferB[640*480] __attribute__((aligned(32)));
 static unsigned short int framebufferC[640*480] __attribute__((aligned(32)));
 
-unsigned int vga_hres;
-unsigned int vga_vres;
+int vga_hres;
+int vga_vres;
 
 unsigned short int *vga_frontbuffer; /* < buffer currently displayed (or request sent to HW) */
 unsigned short int *vga_backbuffer;  /* < buffer currently drawn to, never read by HW */

@@ -21,6 +21,7 @@
 #include "vga.h"
 #include "text.h"
 #include "tmu.h"
+#include "color.h"
 #include "intro.h"
 
 #define NSTRINGS 42
@@ -79,22 +80,37 @@ static void tmu_complete(struct tmu_td *td)
 	tmu_wait = 1;
 }
 
+static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_vertices, int scale)
+{
+	int x, y;
+	int px, py;
+	int cx, cy;
+
+	cx = vga_hres;
+	cy = vga_vres;
+	for(y=0;y<=VMESHLAST;y++)
+		for(x=0;x<=HMESHLAST;x++) {
+			px = 100000*(x*vga_hres-(cx*HMESHLAST))/(HMESHLAST*scale) + cx;
+			py = 100000*(y*vga_vres-(cy*VMESHLAST))/(VMESHLAST*scale) + cy;
+			src_vertices[TMU_MESH_MAXSIZE*y+x].x = px;
+			src_vertices[TMU_MESH_MAXSIZE*y+x].y = py - 3;
+			dst_vertices[TMU_MESH_MAXSIZE*y+x].x = x*vga_hres/HMESHLAST;
+			dst_vertices[TMU_MESH_MAXSIZE*y+x].y = y*vga_vres/VMESHLAST;
+		}
+}
+
+#define DURATION 700
+#define POST 100
+
 void intro_csv()
 {
+	int i;
 	int sn;
+	int r, g, b;
 	/* define those as static, or the compiler optimizes the stack a bit too much */
 	static struct tmu_td tmu_task;
 	static struct tmu_vertex src_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
 	static struct tmu_vertex dst_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
-	int x, y;
-
-	for(y=0;y<=VMESHLAST;y++)
-		for(x=0;x<=HMESHLAST;x++) {
-			src_vertices[y][x].x = x*vga_hres/HMESHLAST;
-			src_vertices[y][x].y = y*vga_vres/VMESHLAST - 3;
-			dst_vertices[y][x].x = x*vga_hres/HMESHLAST;
-			dst_vertices[y][x].y = y*vga_vres/VMESHLAST;
-		}
 
 	tmu_task.flags = 0;
 	tmu_task.hmeshlast = HMESHLAST;
@@ -111,22 +127,46 @@ void intro_csv()
 	tmu_task.callback = tmu_complete;
 	tmu_task.user = NULL;
 
+	make_mesh(&src_vertices[0][0], &dst_vertices[0][0], 100000);
+
 	sn = 0;
-	while(1) {
+	for(i=0;i<DURATION;i++) {
 		tmu_task.srcfbuf = vga_frontbuffer;
 		tmu_task.dstfbuf = vga_backbuffer;
+
+		if(i > (DURATION/3))
+			make_mesh(&src_vertices[0][0], &dst_vertices[0][0], 100000-(4000*(i-DURATION/3)/DURATION));
+
+		if(i > (DURATION/2)) {
+			r = 2*(DURATION-(i-DURATION/2))/DURATION;
+			g = 63*(DURATION-(i-DURATION/2))/DURATION;
+			b = 0;
+		} else {
+			r = 2;
+			g = 63;
+			b = 0;
+		}
 
 		tmu_wait = 0;
 		tmu_submit_task(&tmu_task);
 		while(!tmu_wait);
 
 		if((rand() % 4) == 0) {
-			draw_text((rand() % vga_hres) - 100, (rand() % vga_vres) + 2, 0x0fe0, csv_strings[sn]);
+			draw_text((rand() % vga_hres) + 1 , (rand() % vga_vres) + 2, MAKERGB565(r, g, b), csv_strings[sn]);
 			sn++;
 			if(sn == NSTRINGS) sn = 0;
 			flush_bridge_cache();
 		}
 		
+		vga_swap_buffers();
+	}
+
+	for(i=0;i<POST;i++) {
+		tmu_task.srcfbuf = vga_frontbuffer;
+		tmu_task.dstfbuf = vga_backbuffer;
+		tmu_wait = 0;
+		tmu_submit_task(&tmu_task);
+		while(!tmu_wait);
 		vga_swap_buffers();
 	}
 }
