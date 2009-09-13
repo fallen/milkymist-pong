@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <stddef.h>
 #include <fcntl.h>
@@ -87,18 +88,16 @@ struct fx_state
 };
 
 
+#define PAL_SYNC_RATE 7093789.2
+#define NTSC_SYNC_RATE 7159090.5
+
+
 struct chan_state
 {
   unsigned int ichan;
 
   unsigned int freq;
-  unsigned int tempo;
-  unsigned int vol;
-
-  /* current division */
-  unsigned int ipat;
-  unsigned int idiv;
-  unsigned int ismp;
+  unsigned int volume;
 
   /* offset in the sample in bytes */
   unsigned int smpoff;
@@ -115,6 +114,18 @@ struct chan_state
 #define CHAN_CLEAR_FLAGS(C) do { (C)->flags = 0; } while (0)
   unsigned int flags;
 
+  unsigned int ismp;
+
+
+
+  uint32_t period;       // current period as in channel in pattern
+  uint32_t command;      // current fx/command 12-bits
+  uint32_t sample;       // selected sample number (starting at 1 as in channel in pattern)
+
+  uint32_t position;     // sample offset (the 32.0 of 32.16)
+  uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)
+  uint32_t samplestep;   // 16.16 to add to position.fraction for each step of sample
+  
   /* effect data and state */
   unsigned int fx_data;
   struct fx_state fx_state;
@@ -127,19 +138,45 @@ struct mod_context
 {
   file_context_t fc;
 
-  const struct sample_desc* sdescs;
-  const void* sdata[32];
+  struct sample_desc* sdescs;
+  const int8_t* sdata[32];
+  uint32_t s_length[32];           // length for each instrument in bytes 
+  uint32_t s_roff[32];             // repeat offset for each instrument in bytes
+  uint32_t s_rlength[32];          // repeat lenght for each instrument in bytes
 
-  const unsigned char* song_pos;
+  const unsigned char* song;
 
-  unsigned int ipat; /* initial pattern */
   unsigned int npats;
   const void* pdata;
+  unsigned int songlength;
+
+  /* current division */
+  uint32_t tempo;
+  uint32_t channels;               // nr of channels, normally 4
+  uint32_t samplespertick;         // nr of samples to generate for each tick
+  uint32_t samplesproduced;        // nr of samples we have produced in the current tick
+
+  uint32_t ticksperdivision;       
+  uint32_t divisionsperpattern;
+  uint32_t patternsize;
+  uint32_t divisionsize;
+
+  /* current state */
+  uint32_t songpos;                // which index in the song we are playing at
+  uint32_t ipat;                   
+  uint32_t idiv;
+  uint32_t tick;
+
+  unsigned int play;
 
   struct chan_state cstates[4];
 };
 
 
+
+void mod_reset(mod_context_t* mc);
+void mod_tick(mod_context_t* mc);
+void mod_produce(mod_context_t* mc,int16_t* obuf,unsigned int nsmps);
 
 /* just to be clearer in the code */
 
@@ -182,7 +219,7 @@ static inline int reader_read(struct reader_context* rc, void* buf, size_t size)
 {
   if (size > rc->size)
     {
-      DEBUG_ERROR("size(%u) > rc->size(%u)\n", rc->size, size);
+      DEBUG_ERROR("size(%u) > rc->size(%u)\n", (uint32_t)rc->size, (uint32_t)size);
       return -1;
     }
 
@@ -206,7 +243,7 @@ static inline int reader_skip(struct reader_context* rc, size_t size)
 {
   if (size > rc->size)
     {
-      DEBUG_ERROR("size(%u) > rc->size(%u)\n", rc->size, size);
+      DEBUG_ERROR("size(%u) > rc->size(%u)\n", (uint32_t)rc->size, (uint32_t)size);
       return -1;
     }
 
@@ -299,7 +336,7 @@ static unsigned int get_sample_repeat_length(const mod_context_t* mc,
   return len * BYTES_PER_WORD;
 }
 
-
+#if 0
 static inline const void* get_chan_data(const mod_context_t* mc, const struct chan_state* cs)
 {
 #define DIVS_PER_PAT 64
@@ -309,11 +346,14 @@ static inline const void* get_chan_data(const mod_context_t* mc, const struct ch
 #define BYTES_PER_PAT (DIVS_PER_PAT * BYTES_PER_DIV) /* 1024 */
 
   return
-    (const unsigned char*)mc->pdata +
+    (const unsigned char*)mc->pdata
+ +
     cs->ipat * BYTES_PER_PAT +
     cs->idiv * BYTES_PER_DIV +
-    cs->ichan * BYTES_PER_CHAN;
+    cs->ichan * BYTES_PER_CHAN
+;
 }
+#endif
 
 
 static int load_file(mod_context_t* mc)
@@ -322,6 +362,7 @@ static int load_file(mod_context_t* mc)
   unsigned int ismp;
   unsigned char ipos;
   unsigned char npos;
+  int i;
   const unsigned char* pos;
   size_t size;
   struct reader_context rc;
@@ -344,7 +385,16 @@ static int load_file(mod_context_t* mc)
       goto on_error;
     }
 
-  mc->sdescs = (const struct sample_desc*)rc.pos;
+  mc->sdescs = (struct sample_desc*)rc.pos;
+  for(i=0;i<31;i++)
+    {
+      mc->s_length[i]=be16_to_host(&(mc->sdescs[i].length))*2;
+      mc->s_roff[i]=be16_to_host(&(mc->sdescs[i].roff))*2;
+      mc->s_rlength[i]=be16_to_host(&(mc->sdescs[i].rlength))*2;
+
+      //printf("%02x %04x %04x %04x\n",i+1,mc->s_length[i],mc->s_roff[i],mc->s_rlength[i]);
+    }
+  
 
   /* todo: check descs (length, offset...) */
 
@@ -357,6 +407,7 @@ static int load_file(mod_context_t* mc)
       DEBUG_ERROR("reader_read() == 0x%02x\n", npos);
       goto on_error;
     }
+  mc->songlength = npos;
 
   /* skip this byte */
 
@@ -374,14 +425,13 @@ static int load_file(mod_context_t* mc)
       goto on_error;
     }
 
-  mc->song_pos = rc.pos;
-
-  mc->ipat = *rc.pos;
+  mc->song = rc.pos;
 
   for (pos = rc.pos, npats = 0, ipos = 0; ipos < npos; ++ipos, ++pos)
     if (npats < *pos)
       npats = *pos;
 
+  npats+=1;
   mc->npats = npats;
 
   reader_skip_safe(&rc, 128);
@@ -393,13 +443,19 @@ static int load_file(mod_context_t* mc)
       DEBUG_ERROR("reader_skip()\n");
       goto on_error;
     }
+  
+  // depending on signature it could be 8 channels 
+  mc->channels=4;
+  mc->divisionsperpattern=64;
+  mc->divisionsize=mc->channels<<2;
+  mc->patternsize=mc->divisionsize*mc->divisionsperpattern;
 
   /* pattern data: each pattern is divided into 64
      divisions, each division contains the channels
      data. channel data are represented by 4 bytes
   */
 
-  if (reader_check_size(&rc, npats * BYTES_PER_PAT) == -1)
+  if (reader_check_size(&rc, npats * mc->patternsize) == -1)
     {
       DEBUG_ERROR("reader_check_size() == -1\n");
       goto on_error;
@@ -407,7 +463,7 @@ static int load_file(mod_context_t* mc)
 
   mc->pdata = rc.pos;
 
-  reader_skip_safe(&rc, npats * BYTES_PER_PAT);
+  reader_skip_safe(&rc, npats * mc->patternsize);
 
   /* sample data. build sdata lookup table. */
 
@@ -415,16 +471,26 @@ static int load_file(mod_context_t* mc)
 
   for (ismp = 0; ismp < 31; ++ismp)
     {
+      int len=0;
       /* todo: check for addition sum overflows */
-      mc->sdata[ismp] = rc.pos + size;
+      mc->sdata[ismp] = (int8_t*)rc.pos + size;
+      len=get_sample_length(mc, ismp);
+#if 0
+      printf("sample %2x at %08x %08x %08x %04x %04x\n",ismp+1,(uint32_t)size,rc.pos+size-(uint32_t)mc->pdata+0x43c,len,
+	     (uint32_t)get_sample_repeat_offset(mc, ismp),
+	     (uint32_t)get_sample_repeat_length(mc, ismp));
+#endif
       size += get_sample_length(mc, ismp);
     }
+#if 0
+  printf("ends at %08x\n",rc.pos+size-(uint32_t)mc->pdata+0x43c);
+#endif
 
   /* check there is enough room for samples */
 
   if (reader_check_size(&rc, size) == -1)
     {
-      DEBUG_ERROR("reader_check_size(%u, %u)\n", size, rc.size);
+      DEBUG_ERROR("reader_check_size(%u, %u)\n", (uint32_t)size, (uint32_t)rc.size);
       goto on_error;
     }
 
@@ -606,7 +672,7 @@ fx_init_position_jump(mod_context_t* mc, chan_state_t* cs)
   
   DEBUG_PRINTF("(%x)\n", pos);
 
-  cs->ipat = mc->song_pos[pos & 0x7f];
+  //cs->ipat = mc->song[pos & 0x7f];
 }
 
 
@@ -624,12 +690,12 @@ fx_init_set_volume(mod_context_t* mc, chan_state_t* cs)
 {
   /* legal volumes from 0 to 64 */
 
-  cs->vol = fx_get_byte_param(cs->fx_data);
+  cs->volume = fx_get_byte_param(cs->fx_data);
 
-  DEBUG_PRINTF("(%u)\n", cs->vol);
+  DEBUG_PRINTF("(%u)\n", cs->volume);
 
-  if (cs->vol >= 64)
-    cs->vol = 64;
+  if (cs->volume >= 64)
+    cs->volume = 64;
 }
 
 
@@ -647,14 +713,16 @@ fx_init_pattern_break(mod_context_t* mc, chan_state_t* cs)
 {
   /* continue at next pattern, new division */
 
-  cs->ipat += 1;
+  //cs->ipat += 1;
 
+#if 0
   cs->idiv =
     (fx_get_first_param(cs->fx_data) * 10 +
      fx_get_second_param(cs->fx_data)) &
     0x3f;
 
   DEBUG_PRINTF("(%x)\n", cs->idiv);
+#endif
 }
 
 
@@ -799,10 +867,20 @@ chan_init_state(chan_state_t* cs, unsigned int ichan, unsigned int ipat)
   memset(cs, 0, sizeof(struct chan_state));
 
   cs->ichan = ichan;
-  cs->ipat = ipat;
+  cs->freq=48000;
+
+  cs->volume=0x40;
+  cs->sample=1;
 
   CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
 }
+
+
+
+
+#if 0
+
+
 
 
 static inline int is_end_of_repeating_sample(const mod_context_t* mc,
@@ -1033,21 +1111,20 @@ int chan_produce_samples(struct chan_state* cs,
 	cs->ismp = ismp - 1;
 
       {
+#if 0 
 	DEBUG_PRINTF("newSample: [%u, %u, %u, %u] {%u, %u, %u}\n",
 		     cs->ichan, cs->ipat, cs->idiv, cs->ismp,
 		     get_sample_length(mc, cs->ismp),
 		     get_sample_repeat_offset(mc, cs->ismp),
 		     get_sample_repeat_length(mc, cs->ismp));
+#endif
       }
 
       /* sample volume */
 
-      cs->vol = get_sample_volume(mc, cs->ismp);
+      cs->volume = get_sample_volume(mc, cs->ismp);
 
       /* sample rate (bytes per sec to send). todo, finetune. */
-
-#define PAL_SYNC_RATE 7093789.2
-#define NTSC_SYNC_RATE 7159090.5
 
       if (period)
 	cs->smprate = PAL_SYNC_RATE / (period * 2);
@@ -1081,6 +1158,7 @@ int chan_produce_samples(struct chan_state* cs,
 
 	  /* next pattern on end of division */
 
+#if 0
 	  if ((++cs->idiv) >= DIVS_PER_PAT)
 	    {
 	      cs->idiv = 0;
@@ -1088,6 +1166,7 @@ int chan_produce_samples(struct chan_state* cs,
 	      if ((++cs->ipat) >= mc->npats)
 		cs->ipat = 0;
 	    }
+#endif
 	}
 
       goto produce_more_samples;
@@ -1159,6 +1238,15 @@ int chan_produce_samples(struct chan_state* cs,
 
 
 
+#endif
+
+
+
+
+
+
+
+
 /* exported */
 
 int mod_load_file(mod_context_t** mc, const char* path)
@@ -1173,10 +1261,14 @@ int mod_load_file(mod_context_t** mc, const char* path)
   if (load_file(*mc) == -1)
     goto on_error;
 
+
+
   chan_init_state(&(*mc)->cstates[0], 0, (*mc)->ipat);
   chan_init_state(&(*mc)->cstates[1], 1, (*mc)->ipat);
   chan_init_state(&(*mc)->cstates[2], 2, (*mc)->ipat);
   chan_init_state(&(*mc)->cstates[3], 3, (*mc)->ipat);
+
+  mod_reset(*mc);
 
   return 0;
 
@@ -1199,6 +1291,18 @@ void mod_destroy(mod_context_t* mc)
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 {
   /* fill a 48khz 16-bit signed interleaved stereo audio buffer
@@ -1208,15 +1312,259 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 
   memset(obuf, 0, STEREO_CHAN_COUNT * BYTES_PER_SLE16_INTERLEAVED * nsmps);
 
+#if 0
   chan_produce_samples(&mc->cstates[0], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[1], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[2], mc, obuf, nsmps);
   chan_produce_samples(&mc->cstates[3], mc, obuf, nsmps);
-
-  mix_8bits_4chans_buffer(obuf, nsmps);
+#else
+  mod_produce(mc,obuf,nsmps);
+#endif
 
   return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct sample_desc* sd)
+{
+  uint16_t roff=mc->s_roff[cs->sample-1];
+  uint16_t rlength=mc->s_rlength[cs->sample-1];
+  // advance sample pointer
+  cs->fraction+=cs->samplestep;
+  cs->position+=(cs->fraction>>16);
+  cs->fraction&=0xffff;
+
+  
+  
+  // check for end
+  if(roff>2 || rlength>2)
+    {
+      
+      if(cs->position >= roff+rlength)
+	{
+	  //printf("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
+	  cs->position=roff;
+	}
+    }
+  else
+    {
+      uint16_t length=mc->s_length[cs->sample-1];
+      if(cs->position >= length)
+	{
+	  // should really disable instead - current steps outside of sample before stopping!!!
+	  //printf("end at %08x.%04x\n",cs->position,cs->fraction);
+	  cs->smprate=0;
+	  cs->samplestep=0;
+	}
+    }
+
+  if(0 && cs->samplestep)
+    {
+      printf("%d %2x %p %4d %08x.%04x %08x %08x\n",cs->ichan,cs->sample,mc->sdata[cs->sample-1],mc->sdata[cs->sample-1][cs->position],cs->position,cs->fraction,cs->smprate,cs->samplestep);
+    }
+  
+  
+  return mc->sdata[cs->sample-1][cs->position]*cs->volume;
+}
+
+
+void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
+{
+  int32_t l,r;
+  int32_t j;
+  chan_state_t* cs;
+  for(j=0;j<nsmps;j++)
+    {
+      l=r=0;
+      cs=&mc->cstates[0];
+      l+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
+      cs=&mc->cstates[1];
+      r+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
+      cs=&mc->cstates[2];
+      r+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
+      cs=&mc->cstates[3];
+      l+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
+      l*=2;
+      r*=2;
+      
+      (*obuf++)=l;
+      (*obuf++)=r;
+    }
+}
+
+void mod_produce(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
+{
+  
+  int32_t d;
+  int32_t chunk;
+
+  //printf("mod_produce %p %p %d\n",mc,obuf,nsmps);
+
+  while(nsmps>0)
+    {
+      if(mc->samplesproduced>=mc->samplespertick)
+	{	  
+	  mod_tick(mc);
+	  mc->samplesproduced=0;
+	}
+
+      d=mc->samplespertick-mc->samplesproduced;
+      if(d<0) d=0;
+      if(d>nsmps)
+	chunk=nsmps;
+      else
+	chunk=d;
+      if(chunk)
+	mod_produce_samples(mc,obuf,chunk);
+      mc->samplesproduced+=chunk;
+      obuf+=chunk*2;
+      nsmps-=chunk;
+    }
+}
+
+
+const void* mod_get_playhead(mod_context_t* mc)
+{
+  uint32_t ipat=mc->song[mc->songpos];
+  const void *patternpos=mc->pdata+ipat*mc->patternsize;
+  const void *playhead=patternpos+mc->idiv*mc->divisionsize;
+  //DEBUG_PRINTF("%08x ",playhead-(void*)mc->sdescs+20);
+  return playhead;
+}
+
+int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
+{
+  uint32_t sample= (playhead[0] & 0xf0) | (playhead[2]>>4);
+  uint32_t period= ((playhead[0] & 0x0f) << 8) | playhead[1];
+  uint32_t fx    = ((playhead[2] & 0x0f) << 8) | playhead[3]; 
+  //DEBUG_PRINTF("[S%02x P%3x F%3x]\n",sample,period,fx);
+
+  if(period)
+    {
+      cs->period=period;
+      // number of samples to step per second in source sample
+      cs->smprate = PAL_SYNC_RATE / (period * 2);
+      cs->samplestep = (cs->smprate<<16)/48000;
+      //DEBUG_PRINTF("%08x %08x\n",cs->smprate,cs->samplestep);
+      //printf("%08d %08d %08d %08d\n",cs->smprate,cs->samplestep,(cs->smprate*48000)>>16,(cs->samplestep*48000)>>16);
+    }
+  if(sample)
+    {
+      cs->sample=sample;
+      cs->volume=mc->sdescs[sample-1].volume;
+    }
+  cs->command=fx;
+
+  if(sample || period)
+    {
+      // note on ie restart sample if sample or period is set
+      cs->position=cs->fraction=0;
+    }
+
+  uint8_t fcmd=(fx>>8);
+  uint8_t fdata=fx&0xff;
+  switch(fcmd)
+    {
+    case 0xc:
+      if(fdata>64) fdata=64;
+      cs->volume=fdata;
+      //printf("volume %d %02d\n",cs->ichan,cs->volume);
+    }
+  
+  return 0;
+}
+
+void chan_process_tick(chan_state_t* cs,mod_context_t*mc)
+{
+  // process effects
+}
+
+void mod_process_channels(mod_context_t* mc)
+{
+  uint8_t* playhead=(uint8_t*)mod_get_playhead(mc);
+  uint32_t i=0;
+  //printf("s%3d p%3d d%3d t%2d ",mc->songpos,mc->song[mc->songpos],mc->idiv,mc->tick);
+  for(i=0;i<mc->channels;i++,playhead+=4)
+    {
+      chan_state_t *cs=&mc->cstates[i];
+      //printf("S%02x V%02x %04x.%04x ",cs->sample,cs->volume,cs->samplestep>>16,cs->samplestep&0xffff);
+      chan_process_div(cs,playhead,mc);      
+    }
+  //printf("\n");
+}
+
+void mod_tick_channels(mod_context_t* mc)
+{
+  uint32_t i;
+  for(i=0;i<mc->channels;i++)
+    chan_process_tick(&mc->cstates[i],mc);      
+}
+
+void mod_reset(mod_context_t* mc)
+{
+  mc->tick=0;
+  mc->idiv=0;
+  mc->songpos=0;
+  mc->play=0;
+  mc->ticksperdivision=6;
+  mc->samplespertick=48000/50;
+  mod_process_channels(mc);
+}
+
+void mod_play(mod_context_t* mc)
+{
+  mc->play=1;
+}
+
+void chan_tick(chan_state_t* cs)
+{
+}
+
+void mod_tick(mod_context_t* mc)
+{
+  mc->tick++;
+  if(mc->tick>=mc->ticksperdivision)
+    {
+      mc->tick=0;
+      mc->idiv++;
+      if(mc->idiv>=mc->divisionsperpattern)
+	{
+	  // end of pattern so advance song position
+	  mc->idiv=0;
+	  mc->songpos++;
+	  if(mc->songpos>=mc->songlength)
+	    {
+	      // end of song: stop or restart from beginning?
+	      mc->songpos=0;
+	    }
+	}
+      // Process channel states
+      mod_process_channels(mc);      
+    }
+  mod_tick_channels(mc);
+}
+
+
+
+
+
+
+
 
 
 #if 0

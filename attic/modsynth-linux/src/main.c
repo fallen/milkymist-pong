@@ -9,6 +9,7 @@
 
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "pcm.h"
 #include "mod.h"
 
@@ -22,7 +23,7 @@ int main(int ac, char** av)
   pcm_buf_t* pcm_buf = NULL;
   mod_context_t* mc = NULL;
 
-  if (mod_load_file(&mc, "../data/8.mod") == -1)
+  if (mod_load_file(&mc, "../data/4.mod") == -1)
     goto on_error;
 
   if (pcm_open_dev(&pcm_dev) == -1)
@@ -32,13 +33,21 @@ int main(int ac, char** av)
 
 #if 1 /* 10 seconds to stdout */
   {
+    FILE *f=fopen("output.raw","wb");
     unsigned int i;
 
-    for (i = 0; i < 10; ++i)
+    for (i = 0; i < 30; ++i)
       {
 	mod_fetch(mc, pcm_get_buf_data(pcm_buf), pcm_get_buf_count(pcm_buf));
+#if 0	
 	write(1, pcm_get_buf_data(pcm_buf), pcm_get_buf_size(pcm_buf));
+#else
+	{
+	  fwrite(pcm_get_buf_data(pcm_buf),1,pcm_get_buf_size(pcm_buf),f);
+	}
+#endif
       }
+    fclose(f);
   }
 #else /* play to alsa pcm device */
   {
