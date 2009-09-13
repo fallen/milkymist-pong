@@ -1,187 +1,39 @@
 /*
-** Made by fabien le mentec <texane@gmail.com>
-** 
-** Started on  Thu Sep  3 05:42:47 2009 texane
-** Last update Tue Sep  8 08:28:37 2009 texane
-*/
-
+ * Milkymist Democompo
+ * Copyright (C) 2007, 2008, 2009 Sebastien Bourdeauducq
+ * Copyright (C) 2009 Alexandre Harly
+ * Copyright (C) 2009 Bengt Sjolen
+ * Copyright (C) 2009 Fabien Le Mentec
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3 of the License.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <errno.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 #include "mod.h"
-#include "file.h"
 #include "debug.h"
 
-
-
-/* types */
-
-typedef unsigned char uint8_t;
-typedef unsigned short uint16_t;
-typedef unsigned int uint32_t;
-
-#if 0
-typedef /* signed */ char int8_t;
-typedef /* signed */ short int16_t;
-typedef /* signed */ int int32_t;
-#endif
-
-
-
-struct fx_state
-{
-#define FX_ID_ARPEGGIO 0
-#define FX_ID_SLIDE_UP 1
-#define FX_ID_SLIDE_DOWN 2
-#define FX_ID_SLIDE_TO_NOTE 3
-#define FX_ID_VIBRATO 4
-#define FX_ID_CONT_SLIDE_TO_NOTE_AND_DO_VOL_SLIDE 5
-#define FX_ID_CONT_VIBRATO_AND_DO_VOL_SLIDE 6
-#define FX_ID_TREMOLO 7
-#define FX_ID_UNUSED 8
-#define FX_ID_SET_SAMPLE_OFFSET 9
-#define FX_ID_VOLUME_SLIDE 10
-#define FX_ID_POS_JUMP 11
-#define FX_ID_SET_VOLUME 12
-#define FX_ID_PATTERN_BREAK 13
-#define FX_ID_EXTENDED 14
-#define FX_ID_SET_SPEED 15
-
-#define FX_XID_SET_FILTER 0
-#define FX_XID_FINESLIDE_UP 1
-#define FX_XID_FINESLIDE_DOWN 2
-#define FX_XID_SET_GLISSANDO 3
-#define FX_XID_SET_VIBRATO_WAVEFORM 4
-#define FX_XID_SET_FINETUNE_VALUE 5
-#define FX_XID_LOOP_PATTERN 6
-#define FX_XID_SET_TREMOLO_WAVEFORM 7
-#define FX_XID_UNUSED 8
-#define FX_XID_RERTRIGGER_SAMPLE 9
-#define FX_XID_FINE_VOLUME_SLIDE_UP 10
-#define FX_XID_FINE_VOLUME_SLIDE_DOWN 11
-#define FX_XID_CUT_SAMPLE 12
-#define FX_XID_DELAY_SAMPLE 13
-#define FX_XID_DELAY_PATTERN 14
-#define FX_XID_INVERT_LOOP 15
-
-  unsigned int fx;
-
-  union
-  {
-    struct
-    {
-      unsigned int noff; /* note offset */
-    } arpeggio;
-
-  } u;
-
-};
 
 
 #define PAL_SYNC_RATE 7093789.2
 #define NTSC_SYNC_RATE 7159090.5
 
 
-struct chan_state
-{
-  unsigned int ichan;
 
-  unsigned int freq;
-  unsigned int volume;
-
-  /* offset in the sample in bytes */
-  unsigned int smpoff;
-
-  /* sample rate */
-  unsigned int smprate;
-
-  /* chan flags */
-#define CHAN_FLAG_IS_SAMPLE_STARTING (1 << 0)
-#define CHAN_FLAG_IS_SAMPLE_REPEATING (1 << 1)
-#define CHAN_SET_FLAG(C, F) do { (C)->flags |= CHAN_FLAG_ ## F; } while (0)
-#define CHAN_CLEAR_FLAG(C, F) do { (C)->flags &= ~CHAN_FLAG_ ## F; } while (0)
-#define CHAN_HAS_FLAG(C, F) ((C)->flags & (CHAN_FLAG_ ## F))
-#define CHAN_CLEAR_FLAGS(C) do { (C)->flags = 0; } while (0)
-  unsigned int flags;
-
-  unsigned int ismp;
-
-
-
-  uint32_t period;       // current period as in channel in pattern
-  uint32_t command;      // current fx/command 12-bits
-  uint32_t sample;       // selected sample number (starting at 1 as in channel in pattern)
-
-  uint32_t position;     // sample offset (the 32.0 of 32.16)
-  uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)
-  uint32_t samplestep;   // 16.16 to add to position.fraction for each step of sample
-  
-  /* effect data and state */
-  unsigned int fx_data;
-  struct fx_state fx_state;
-};
-
-typedef struct chan_state chan_state_t;
-
-
-struct mod_context
-{
-  file_context_t fc;
-
-  struct sample_desc* sdescs;
-  const int8_t* sdata[32];
-  uint32_t s_length[32];           // length for each instrument in bytes 
-  uint32_t s_roff[32];             // repeat offset for each instrument in bytes
-  uint32_t s_rlength[32];          // repeat lenght for each instrument in bytes
-
-  const unsigned char* song;
-
-  unsigned int npats;
-  const void* pdata;
-  unsigned int songlength;
-
-  /* current division */
-  uint32_t tempo;
-  uint32_t channels;               // nr of channels, normally 4
-  uint32_t tickspersecond;
-  uint32_t samplespertick;         // nr of samples to generate for each tick
-  uint32_t samplesproduced;        // nr of samples we have produced in the current tick
-
-  uint32_t ticksperdivision;       
-  uint32_t divisionsperpattern;
-  uint32_t patternsize;
-  uint32_t divisionsize;
-
-  /* current state */
-  uint32_t songpos;                // which index in the song we are playing at
-  uint32_t ipat;                   
-  uint32_t idiv;
-  uint32_t tick;
-
-  uint32_t break_on_next_idiv;
-  uint32_t break_next_idiv;
-  uint32_t break_next_songpos;
-
-  unsigned int play;
-
-  struct chan_state cstates[4];
-};
-
-
-
-void mod_reset(mod_context_t* mc);
-void mod_tick(mod_context_t* mc);
-void mod_produce(mod_context_t* mc,int16_t* obuf,unsigned int nsmps);
+static void mod_reset(mod_context_t* mc);
+static void mod_tick(mod_context_t* mc);
+static void mod_produce(mod_context_t* mc,int16_t* obuf,unsigned int nsmps);
 
 /* just to be clearer in the code */
 
@@ -320,15 +172,15 @@ static inline int get_sample_finetune(const mod_context_t* mc,
 }
 
 
-static unsigned int get_sample_repeat_offset(const mod_context_t* mc,
-					     unsigned int ismp)
+static unsigned int __attribute__((unused))
+get_sample_repeat_offset(const mod_context_t* mc, unsigned int ismp)
 {
   return be16_to_host(&get_sample_desc(mc, ismp)->roff) * BYTES_PER_WORD;
 }
 
 
-static unsigned int get_sample_repeat_length(const mod_context_t* mc,
-					     unsigned int ismp)
+static unsigned int __attribute__((unused))
+get_sample_repeat_length(const mod_context_t* mc, unsigned int ismp)
 {
   /* only valid if > 1 */
 
@@ -361,7 +213,7 @@ static inline const void* get_chan_data(const mod_context_t* mc, const struct ch
 #endif
 
 
-static int load_file(mod_context_t* mc)
+static int load_file(mod_context_t* mc, const void* data, size_t length)
 {
   unsigned int npats;
   unsigned int ismp;
@@ -372,7 +224,7 @@ static int load_file(mod_context_t* mc)
   size_t size;
   struct reader_context rc;
 
-  reader_init(&rc, file_get_data(&mc->fc), file_get_size(&mc->fc));
+  reader_init(&rc, data, length);
 
   /* skip title */
 
@@ -1115,16 +967,6 @@ int chan_produce_samples(struct chan_state* cs,
       if (ismp)
 	cs->ismp = ismp - 1;
 
-      {
-#if 0 
-	DEBUG_PRINTF("newSample: [%u, %u, %u, %u] {%u, %u, %u}\n",
-		     cs->ichan, cs->ipat, cs->idiv, cs->ismp,
-		     get_sample_length(mc, cs->ismp),
-		     get_sample_repeat_offset(mc, cs->ismp),
-		     get_sample_repeat_length(mc, cs->ismp));
-#endif
-      }
-
       /* sample volume */
 
       cs->volume = get_sample_volume(mc, cs->ismp);
@@ -1162,16 +1004,6 @@ int chan_produce_samples(struct chan_state* cs,
 	  cs->smpoff = 0;
 
 	  /* next pattern on end of division */
-
-#if 0
-	  if ((++cs->idiv) >= DIVS_PER_PAT)
-	    {
-	      cs->idiv = 0;
-
-	      if ((++cs->ipat) >= mc->npats)
-		cs->ipat = 0;
-	    }
-#endif
 	}
 
       goto produce_more_samples;
@@ -1246,69 +1078,25 @@ int chan_produce_samples(struct chan_state* cs,
 #endif
 
 
-
-
-
-
-
-
 /* exported */
 
-int mod_load_file(mod_context_t** mc, const char* path)
+int mod_init(mod_context_t* mc, const void* data, size_t length)
 {
-  *mc = malloc(sizeof(mod_context_t));
-  if (*mc == NULL)
+  if (load_file(mc, data, length) == -1)
     return -1;
 
-  if (file_open(&(*mc)->fc, path) == -1)
-    goto on_open_error;
+  chan_init_state(&mc->cstates[0], 0, mc->ipat);
+  chan_init_state(&mc->cstates[1], 1, mc->ipat);
+  chan_init_state(&mc->cstates[2], 2, mc->ipat);
+  chan_init_state(&mc->cstates[3], 3, mc->ipat);
 
-  if (load_file(*mc) == -1)
-    goto on_error;
-
-
-
-  chan_init_state(&(*mc)->cstates[0], 0, (*mc)->ipat);
-  chan_init_state(&(*mc)->cstates[1], 1, (*mc)->ipat);
-  chan_init_state(&(*mc)->cstates[2], 2, (*mc)->ipat);
-  chan_init_state(&(*mc)->cstates[3], 3, (*mc)->ipat);
-
-  mod_reset(*mc);
+  mod_reset(mc);
 
   return 0;
-
- on_open_error:
-  free(*mc);
-  *mc = NULL;
-  return -1;
-
- on_error:
-  mod_destroy(*mc);
-  *mc = NULL;
-  return -1;
 }
 
 
-void mod_destroy(mod_context_t* mc)
-{
-  file_close(&mc->fc);
-  free(mc);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
+void mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 {
   /* fill a 48khz 16-bit signed interleaved stereo audio buffer
      from a mod file. name the mod filename, buffer the sample
@@ -1317,16 +1105,7 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 
   memset(obuf, 0, STEREO_CHAN_COUNT * BYTES_PER_SLE16_INTERLEAVED * nsmps);
 
-#if 0
-  chan_produce_samples(&mc->cstates[0], mc, obuf, nsmps);
-  chan_produce_samples(&mc->cstates[1], mc, obuf, nsmps);
-  chan_produce_samples(&mc->cstates[2], mc, obuf, nsmps);
-  chan_produce_samples(&mc->cstates[3], mc, obuf, nsmps);
-#else
   mod_produce(mc,obuf,nsmps);
-#endif
-
-  return 0;
 }
 
 
@@ -1345,7 +1124,7 @@ int mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 
 
 
-int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct sample_desc* sd)
+static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct sample_desc* sd)
 {
   uint16_t roff=mc->s_roff[cs->sample-1];
   uint16_t rlength=mc->s_rlength[cs->sample-1];
@@ -1388,7 +1167,7 @@ int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct sample_
 }
 
 
-void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
+static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
 {
   int32_t l,r;
   int32_t j;
@@ -1412,7 +1191,7 @@ void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
     }
 }
 
-void mod_produce(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
+static void mod_produce(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
 {
   
   int32_t d;
@@ -1443,7 +1222,7 @@ void mod_produce(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
 }
 
 
-const void* mod_get_playhead(mod_context_t* mc)
+static const void* mod_get_playhead(mod_context_t* mc)
 {
   uint32_t ipat=mc->song[mc->songpos];
   const void *patternpos=mc->pdata+ipat*mc->patternsize;
@@ -1452,7 +1231,7 @@ const void* mod_get_playhead(mod_context_t* mc)
   return playhead;
 }
 
-int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
+static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
 {
   uint32_t sample= (playhead[0] & 0xf0) | (playhead[2]>>4);
   uint32_t period= ((playhead[0] & 0x0f) << 8) | playhead[1];
@@ -1530,12 +1309,12 @@ int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
   return 0;
 }
 
-void chan_process_tick(chan_state_t* cs,mod_context_t*mc)
+static void chan_process_tick(chan_state_t* cs,mod_context_t*mc)
 {
   // process effects
 }
 
-void mod_process_channels(mod_context_t* mc)
+static void mod_process_channels(mod_context_t* mc)
 {
   uint8_t* playhead=(uint8_t*)mod_get_playhead(mc);
   uint32_t i=0;
@@ -1549,14 +1328,14 @@ void mod_process_channels(mod_context_t* mc)
   //printf("\n");
 }
 
-void mod_tick_channels(mod_context_t* mc)
+static void mod_tick_channels(mod_context_t* mc)
 {
   uint32_t i;
   for(i=0;i<mc->channels;i++)
     chan_process_tick(&mc->cstates[i],mc);      
 }
 
-void mod_reset(mod_context_t* mc)
+static void mod_reset(mod_context_t* mc)
 {
   mc->tick=0;
   mc->idiv=0;
@@ -1568,16 +1347,16 @@ void mod_reset(mod_context_t* mc)
   mod_process_channels(mc);
 }
 
-void mod_play(mod_context_t* mc)
+static void __attribute__((unused)) mod_play(mod_context_t* mc)
 {
   mc->play=1;
 }
 
-void chan_tick(chan_state_t* cs)
+static void __attribute__((unused)) chan_tick(chan_state_t* cs)
 {
 }
 
-void mod_tick(mod_context_t* mc)
+static void mod_tick(mod_context_t* mc)
 {
   mc->tick++;
   if(mc->tick>=mc->ticksperdivision)
@@ -1610,92 +1389,3 @@ void mod_tick(mod_context_t* mc)
     }
   mod_tick_channels(mc);
 }
-
-
-
-
-
-
-
-
-
-#if 0
-
-
-/* sample stream */
-
-struct sstream
-{
-  unsigned int nsamples;
-  unsigned int pos;
-  unsigned int32_t data[1];
-};
-
-
-static void sstream_init(struct sstream* ss)
-{
-}
-
-
-static void sstream_release(struct sstream* ss)
-{
-  
-}
-
-
-static inline unsigned int sstream_count(const struct sstream* ss)
-{
-  return ss->count;
-}
-
-
-static inline int sstream_is_empty(const struct sstream* ss)
-{
-  return ss->pss == 0;
-}
-
-
-static void sstream_write(struct sstream* ss, const int8_t* smps, unsigned int nsmps, unsigned int freq)
-{
-  /* assumes 8bit pcm samples sampled at freq hz.
-     nsmps is an inout param containing the sample
-     count and being udpated with the number of
-     samples consumed.
-   */
-
-  const unsigned int n = 48000 / freq;
-
-  unsigned int i;
-  unsigned int j;
-
-  for (j = 0; j < *nsmps; ++j, ++smps)
-    {
-      if (ss->nsmps < n)
-	break;
-
-      for (i = 0; i < n; ++i, ++obuf)
-	*obuf = *smps;
-    }
-
-  *nsmps = j;
-}
-
-
-static void mix_sstreams(int16_t* obuf, struct sstream* s0, struct sstream* s1, unsigned int nsmps)
-{
-  /* mix 4 sstreams into the interleaved le16 obuf */
-
-  const unsigned int nsamples = ss[0]->nsamples;
-
-  const uint32_t* p; = ss0->data;
-  const uint32_t* q; = ss1->data;
-
-  for (i = 0; i < ss->nsamples; ++i, ++p, ++q, ++r, ++s, obuf += 2)
-    {
-      obuf[0] = (uint16_t)((uint32_t)*p + (uint32_t)*q);
-      obuf[1] = (uint16_t)((uint32_t)*r + (uint32_t)*s);
-    }
-}
-
-
-#endif
