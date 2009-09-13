@@ -23,7 +23,7 @@ int main(int ac, char** av)
   pcm_buf_t* pcm_buf = NULL;
   mod_context_t* mc = NULL;
 
-  if (mod_load_file(&mc, "../data/4.mod") == -1)
+  if (mod_load_file(&mc, "../data/0.mod") == -1)
     goto on_error;
 
   if (pcm_open_dev(&pcm_dev) == -1)
@@ -36,7 +36,7 @@ int main(int ac, char** av)
     FILE *f=fopen("output.raw","wb");
     unsigned int i;
 
-    for (i = 0; i < 30; ++i)
+    for (i = 0; i < 230; ++i)
       {
 	mod_fetch(mc, pcm_get_buf_data(pcm_buf), pcm_get_buf_count(pcm_buf));
 #if 0	
