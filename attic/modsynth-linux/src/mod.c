@@ -375,15 +375,12 @@ static inline unsigned int fx_get_byte_param(uint32_t fx)
 static void
 fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->command),
-	       fx_get_second_param(cs->command));
 }
 
 
 static void
 fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
 }
 
 
@@ -392,14 +389,25 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+  cs->periodstep = fx_get_byte_param(cs->command);
 }
 
 
 static void
 fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+  /* int underflow */
+  if (cs->period - cs->periodstep > cs->period)
+    return ;
+
+  /* dont drop below note B3 (period 113) */
+  if (cs->period - cs->periodstep < 113)
+    {
+      cs->period = 113;
+      return ;
+    }
+
+  cs->period -= cs->periodstep ;
 }
 
 
@@ -408,14 +416,25 @@ fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+  cs->periodstep = fx_get_byte_param(cs->command);
 }
 
 
 static void
 fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+  /* int overflow */
+  if (cs->period + cs->periodstep < cs->period)
+    return ;
+
+  /* dont drop above note C1 (period 856) */
+  if (cs->period + cs->periodstep > 856)
+    {
+      cs->period = 856;
+      return ;
+    }
+
+  cs->period += cs->periodstep ;
 }
 
 
@@ -424,14 +443,12 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
 }
 
 
 static void
 fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
 }
 
 
@@ -440,14 +457,26 @@ fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
 }
 
 
 static void
 fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+}
+
+
+/* continue slide to note do volume slide */
+
+static void
+fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
+}
+
+
+static void
+fx_ontick_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
 }
 
 
@@ -466,27 +495,31 @@ fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 }
 
 
-static void
-fx_ontick_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
-}
-
-
 /* volume slide */
 
 static void
 fx_ondiv_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->command),
-	       fx_get_second_param(cs->command));
+  cs->volstep = fx_get_first_param(cs->command);
+
+  if (!cs->volstep)
+    cs->volstep = fx_get_second_param(cs->command) * -1;
 }
 
 
 static void
 fx_ontick_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+  /* integer underflow or max volume reached */
+  if (cs->volstep < 0 && (cs->volume + cs->volstep > cs->volume))
+    return ;
+  else if (cs->volume + cs->volstep > 64)
+    {
+      cs->volume = 64;
+      return ;
+    }
+
+  cs->volume += cs->volstep;
 }
 
 
@@ -503,13 +536,6 @@ fx_ondiv_position_jump(mod_context_t* mc, chan_state_t* cs)
 }
 
 
-static void
-fx_ontick_position_jump(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
-}
-
-
 /* set volume */
 
 static void
@@ -521,13 +547,6 @@ fx_ondiv_set_volume(mod_context_t* mc, chan_state_t* cs)
 
   if (cs->volume > 64)
     cs->volume = 64;
-}
-
-
-static void
-fx_ontick_set_volume(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
 }
 
 
@@ -549,13 +568,6 @@ fx_ondiv_pattern_break(mod_context_t* mc, chan_state_t* cs)
 }
 
 
-static void
-fx_ontick_pattern_break(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
-}
-
-
 /* set speed (tempo) */
 
 static void
@@ -573,15 +585,8 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
       // samples per tick is really what we want to set here
       // number of ticks per beat is 4*mc->ticksperdivision
       mc->tickspersecond = speed * 4 * mc->ticksperdivision / 60;
-      mc->samplespertick= 48000 / mc->tickspersecond;
+      mc->samplespertick = 48000 / mc->tickspersecond;
     }
-}
-
-
-static void
-fx_ontick_set_speed(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_ENTER();
 }
 
 
@@ -589,13 +594,12 @@ fx_ontick_set_speed(mod_context_t* mc, chan_state_t* cs)
 
 static void fx_ondiv_unknown(mod_context_t* mc, struct chan_state* cs)
 {
-  DEBUG_PRINTF("unknown fx(0x%03x)\n", cs->command);
+  DEBUG_PRINTF("unknown fx(0x%02x)\n", (cs->command & 0xf00) >> 8);
 }
 
 
 static void fx_ontick_unknown(mod_context_t* mc, struct chan_state* cs)
 {
-  DEBUG_ENTER();
 }
 
 
@@ -612,6 +616,7 @@ struct fx_info
 static const struct fx_info fx_table[] =
   {
 #define EXPAND_FX_INFO_ENTRY(S) { #S, fx_ondiv_ ## S, fx_ontick_ ## S }
+#define EXPAND_FX_INFO_ENTRY_NOTICK(S) { #S, fx_ondiv_ ## S, fx_ontick_unknown }
 
     /* base effects */
 
@@ -620,17 +625,17 @@ static const struct fx_info fx_table[] =
     EXPAND_FX_INFO_ENTRY(slide_down),
     EXPAND_FX_INFO_ENTRY(slide_to_note),
     EXPAND_FX_INFO_ENTRY(vibrato),
+    EXPAND_FX_INFO_ENTRY(slide_to_note_volume_slide),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(set_sample_offset),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_sample_offset),
     EXPAND_FX_INFO_ENTRY(volume_slide),
-    EXPAND_FX_INFO_ENTRY(position_jump),
-    EXPAND_FX_INFO_ENTRY(set_volume),
-    EXPAND_FX_INFO_ENTRY(pattern_break),
+    EXPAND_FX_INFO_ENTRY_NOTICK(position_jump),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_volume),
+    EXPAND_FX_INFO_ENTRY_NOTICK(pattern_break),
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(set_speed),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_speed),
 
     /* extended effects */
 
@@ -658,8 +663,8 @@ static inline unsigned int fx_get_index(uint32_t fx)
   /* get the fx table index */
 
   const unsigned int i = (fx & 0xf00) >> 8;
-
-  return i != 14 ? i : fx & 0xf0;
+  
+  return i != 14 ? i : ((fx & 0xf0) >> 4) + 0x10;
 }
 
 
@@ -853,6 +858,8 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
   uint32_t fx    = ((playhead[2] & 0x0f) << 8) | playhead[3]; 
   //DEBUG_PRINTF("[S%02x P%3x F%3x]\n",sample,period,fx);
 
+  cs->periodstep = 0;
+
   if(period)
     {
       cs->period=period;
@@ -866,6 +873,7 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
     {
       cs->sample=sample;
       cs->volume=mc->sdescs[sample-1].volume;
+      cs->volstep = 0;
     }
   cs->command=fx;
 
