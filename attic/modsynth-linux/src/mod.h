@@ -49,7 +49,10 @@ struct chan_state
   unsigned int ichan;
 
   unsigned int freq;
+
+  /* volume step */
   unsigned int volume;
+  int volstep;
 
   /* offset in the sample in bytes */
   unsigned int smpoff;
@@ -69,6 +72,7 @@ struct chan_state
   unsigned int ismp;
 
   uint32_t period;       // current period as in channel in pattern
+  uint32_t periodstep;	 // periode step for slide up or down
   uint32_t command;      // current fx/command 12-bits
   uint32_t sample;       // selected sample number (starting at 1 as in channel in pattern)
 
