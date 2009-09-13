@@ -69,8 +69,8 @@ static const char csv_strings[NSTRINGS][24] = {
 	"1251402612,1258,5263"
 };
 
-#define HMESHLAST 24
-#define VMESHLAST 32
+#define HMESHLAST 32
+#define VMESHLAST 24
 
 static volatile int tmu_wait;
 
@@ -82,15 +82,16 @@ static void tmu_complete(struct tmu_td *td)
 void intro_csv()
 {
 	int sn;
-	struct tmu_td tmu_task;
-	struct tmu_vertex src_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
-	struct tmu_vertex dst_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
+	/* define those as static, or the compiler optimizes the stack a bit too much */
+	static struct tmu_td tmu_task;
+	static struct tmu_vertex src_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
+	static struct tmu_vertex dst_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
 	int x, y;
 
-	for(y=0;y<=HMESHLAST;y++)
-		for(x=0;x<=VMESHLAST;x++) {
+	for(y=0;y<=VMESHLAST;y++)
+		for(x=0;x<=HMESHLAST;x++) {
 			src_vertices[y][x].x = x*vga_hres/HMESHLAST;
-			src_vertices[y][x].y = y*vga_vres/VMESHLAST - 1;
+			src_vertices[y][x].y = y*vga_vres/VMESHLAST - 3;
 			dst_vertices[y][x].x = x*vga_hres/HMESHLAST;
 			dst_vertices[y][x].y = y*vga_vres/VMESHLAST;
 		}
@@ -98,7 +99,7 @@ void intro_csv()
 	tmu_task.flags = 0;
 	tmu_task.hmeshlast = HMESHLAST;
 	tmu_task.vmeshlast = VMESHLAST;
-	tmu_task.brightness = 60;
+	tmu_task.brightness = 62;
 	tmu_task.chromakey = 0;
 	tmu_task.srcmesh = &src_vertices[0][0];
 	tmu_task.srchres = vga_hres;
@@ -119,8 +120,8 @@ void intro_csv()
 		tmu_submit_task(&tmu_task);
 		while(!tmu_wait);
 
-		if((rand() % 40) == 0) {
-			draw_text((rand() % vga_hres) - 100, (rand() % 120) + 2, 0x0fe0, csv_strings[sn]);
+		if((rand() % 4) == 0) {
+			draw_text((rand() % vga_hres) - 100, (rand() % vga_vres) + 2, 0x0fe0, csv_strings[sn]);
 			sn++;
 			if(sn == NSTRINGS) sn = 0;
 			flush_bridge_cache();
