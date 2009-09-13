@@ -1492,29 +1492,31 @@ int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
       //printf("volume %d %02d\n",cs->ichan,cs->volume);
       break;
     case 0xb: // position jump
+      DEBUG_PRINTF("position jump\n");
       mc->break_on_next_idiv=1;
       mc->break_next_idiv=0;
       mc->break_next_songpos=fdata&0x7f;
       break;
     case 0xd: // pattern break;
+      DEBUG_PRINTF("pattern break\n");
       mc->break_on_next_idiv=1;
       mc->break_next_idiv=(fdata&0xf0)*10+(fdata&0xf);
       mc->break_next_songpos=mc->songpos+1;
       break;
     case 0x9: 
+      DEBUG_PRINTF("set sample offset\n");
       cs->position=fdata*256*2;
       length=mc->s_length[cs->sample-1];
-      if(cs->position>length) 
-	{ cs->position=length-1; }
       break;
     case 0xe:
       switch(fdata>>4)
 	{
-	case 0x9: printf("retrigger sample\n"); break;
-	case 0xd: printf("delay sample\n"); break;
+	case 0x9: DEBUG_PRINTF("retrigger sample\n"); break;
+	case 0xd: DEBUG_PRINTF("delay sample\n"); break;
 	}
       break;
     case 0xf: // Set tempo
+      DEBUG_PRINTF("set tempo\n");
       if(fdata<=32) mc->ticksperdivision=fdata;
       else 
 	{
