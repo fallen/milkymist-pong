@@ -15,11 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __BRD_H
-#define __BRD_H
+#ifndef __TEXT_H
+#define __TEXT_H
 
-extern const struct board_desc *brd_desc;
+void draw_char(int x, int y, unsigned short color, char c);
+void draw_text(int x, int y, unsigned short color, const char *str);
 
-void brd_init();
-
-#endif /* __BRD_H */
+#endif /* __TEXT_H */
