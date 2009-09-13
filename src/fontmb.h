@@ -18,8 +18,8 @@
 #ifndef __FONTMB_H
 #define __FONTMB_H
 
-#define FONT_W 7
-#define FONT_H 13
+#define FONT_W 9
+#define FONT_H 15
 extern char font_data[];
 
 #endif /* __FONTMB_H */

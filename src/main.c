@@ -59,8 +59,10 @@ int main()
 	tmu_init();
 	pfpu_init();
 
-	intro_csv();
-	while(1);
+	while(1) {
+		intro_csv();
+		while(!(CSR_GPIO_IN & GPIO_DIP3));
+	}
 	
 	return 0;
 }
