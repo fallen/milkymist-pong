@@ -168,6 +168,10 @@ struct mod_context
   uint32_t idiv;
   uint32_t tick;
 
+  uint32_t break_on_next_idiv;
+  uint32_t break_next_idiv;
+  uint32_t break_next_songpos;
+
   unsigned int play;
 
   struct chan_state cstates[4];
@@ -1477,8 +1481,9 @@ int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
       cs->position=cs->fraction=0;
     }
 
-  uint8_t fcmd=(fx>>8);
-  uint8_t fdata=fx&0xff;
+  uint32_t fcmd=(fx>>8);
+  uint32_t fdata=fx&0xff;
+  uint32_t length;
   switch(fcmd)
     {
     case 0xc: // Set volume
@@ -1486,7 +1491,22 @@ int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
       cs->volume=fdata;
       //printf("volume %d %02d\n",cs->ichan,cs->volume);
       break;
-    case 0x9: printf("set sample offset\n"); break;
+    case 0xb: // position jump
+      mc->break_on_next_idiv=1;
+      mc->break_next_idiv=0;
+      mc->break_next_songpos=fdata&0x7f;
+      break;
+    case 0xd: // pattern break;
+      mc->break_on_next_idiv=1;
+      mc->break_next_idiv=(fdata&0xf0)*10+(fdata&0xf);
+      mc->break_next_songpos=mc->songpos+1;
+      break;
+    case 0x9: 
+      cs->position=fdata*256*2;
+      length=mc->s_length[cs->sample-1];
+      if(cs->position>length) 
+	{ cs->position=length-1; }
+      break;
     case 0xe:
       switch(fdata>>4)
 	{
@@ -1499,15 +1519,12 @@ int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t* mc)
       else 
 	{
 	  // set beats per minute, at 6 ticks per division and 4 divisions is one beat
-	  // samples per tick is really what we want to set here?
+	  // samples per tick is really what we want to set here
 	  // number of ticks per beat is 4*mc->ticksperdivision
-	  // default is 50 ticks per second
-	  // 50*60/bmp is new number of ticks per second
-
-	  // ticks per minute
 	  mc->tickspersecond=fdata*4*mc->ticksperdivision/60;
 	  mc->samplespertick=48000/mc->tickspersecond;
 	}
+      break;
     }
   
   return 0;
@@ -1578,6 +1595,16 @@ void mod_tick(mod_context_t* mc)
 	      mc->songpos=0;
 	    }
 	}
+
+      if(mc->break_on_next_idiv)
+	{
+	  mc->idiv=mc->break_next_idiv&0x3f;
+	  mc->songpos=mc->break_next_songpos;
+	  if(mc->songpos>=mc->songlength)
+	    mc->songpos=0;
+	  mc->break_on_next_idiv=0;
+	}
+
       // Process channel states
       mod_process_channels(mc);      
     }
