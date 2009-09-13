@@ -42,60 +42,6 @@ typedef /* signed */ int int32_t;
 #endif
 
 
-/* effect state */
-
-struct fx_state
-{
-#define FX_ID_ARPEGGIO 0
-#define FX_ID_SLIDE_UP 1
-#define FX_ID_SLIDE_DOWN 2
-#define FX_ID_SLIDE_TO_NOTE 3
-#define FX_ID_VIBRATO 4
-#define FX_ID_CONT_SLIDE_TO_NOTE_AND_DO_VOL_SLIDE 5
-#define FX_ID_CONT_VIBRATO_AND_DO_VOL_SLIDE 6
-#define FX_ID_TREMOLO 7
-#define FX_ID_UNUSED 8
-#define FX_ID_SET_SAMPLE_OFFSET 9
-#define FX_ID_VOLUME_SLIDE 10
-#define FX_ID_POS_JUMP 11
-#define FX_ID_SET_VOLUME 12
-#define FX_ID_PATTERN_BREAK 13
-#define FX_ID_EXTENDED 14
-#define FX_ID_SET_SPEED 15
-
-#define FX_XID_SET_FILTER 0
-#define FX_XID_FINESLIDE_UP 1
-#define FX_XID_FINESLIDE_DOWN 2
-#define FX_XID_SET_GLISSANDO 3
-#define FX_XID_SET_VIBRATO_WAVEFORM 4
-#define FX_XID_SET_FINETUNE_VALUE 5
-#define FX_XID_LOOP_PATTERN 6
-#define FX_XID_SET_TREMOLO_WAVEFORM 7
-#define FX_XID_UNUSED 8
-#define FX_XID_RERTRIGGER_SAMPLE 9
-#define FX_XID_FINE_VOLUME_SLIDE_UP 10
-#define FX_XID_FINE_VOLUME_SLIDE_DOWN 11
-#define FX_XID_CUT_SAMPLE 12
-#define FX_XID_DELAY_SAMPLE 13
-#define FX_XID_DELAY_PATTERN 14
-#define FX_XID_INVERT_LOOP 15
-
-  unsigned int fx;
-
-  union
-  {
-    struct
-    {
-      unsigned int noff; /* note offset */
-    } arpeggio;
-
-  } u;
-
-};
-
-typedef struct fx_state fx_state_t;
-
-
 /* channel state */
 
 struct chan_state
@@ -129,10 +75,6 @@ struct chan_state
   uint32_t position;     // sample offset (the 32.0 of 32.16)
   uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)
   uint32_t samplestep;   // 16.16 to add to position.fraction for each step of sample
-  
-  /* effect data and state */
-  unsigned int fx_data;
-  fx_state_t fx_state;
 };
 
 typedef struct chan_state chan_state_t;

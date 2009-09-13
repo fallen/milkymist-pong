@@ -371,22 +371,20 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
 
 /* helper routines */
 
-static inline unsigned int fx_get_first_param(unsigned int fx)
+static inline unsigned int fx_get_first_param(uint32_t fx)
 {
   return (fx & 0xf0) >> 4;
 }
 
 
-static inline unsigned int fx_get_second_param(unsigned int fx)
+static inline unsigned int fx_get_second_param(uint32_t fx)
 {
   return fx & 0x0f;
 }
 
 
-static inline unsigned int fx_get_byte_param(unsigned int fx)
+static inline unsigned int fx_get_byte_param(uint32_t fx)
 {
-  /* (fx_get_first_param() * 16 + fx_get_second_param() */
-
   return fx & 0xff;
 }
 
@@ -394,15 +392,15 @@ static inline unsigned int fx_get_byte_param(unsigned int fx)
 /* arpeggio */
 
 static void
-fx_init_arpeggio(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->fx_data),
-	       fx_get_second_param(cs->fx_data));
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->command),
+	       fx_get_second_param(cs->command));
 }
 
 
 static void
-fx_apply_arpeggio(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -411,14 +409,14 @@ fx_apply_arpeggio(mod_context_t* mc, chan_state_t* cs)
 /* slide up */
 
 static void
-fx_init_slide_up(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
 
 
 static void
-fx_apply_slide_up(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -427,14 +425,14 @@ fx_apply_slide_up(mod_context_t* mc, chan_state_t* cs)
 /* slide down */
 
 static void
-fx_init_slide_down(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
 
 
 static void
-fx_apply_slide_down(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -443,14 +441,14 @@ fx_apply_slide_down(mod_context_t* mc, chan_state_t* cs)
 /* slide to note */
 
 static void
-fx_init_slide_to_note(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
 
 
 static void
-fx_apply_slide_to_note(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -459,14 +457,14 @@ fx_apply_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 /* vibrato */
 
 static void
-fx_init_vibrato(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
 
 
 static void
-fx_apply_vibrato(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -475,27 +473,20 @@ fx_apply_vibrato(mod_context_t* mc, chan_state_t* cs)
 /* set sample offset */
 
 static void
-fx_init_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
-  unsigned int smpoff =
-    fx_get_first_param(cs->fx_data) * 4096 +
-    fx_get_second_param(cs->fx_data) * 256 *
-    BYTES_PER_WORD;
+  uint32_t length;
 
-  DEBUG_PRINTF("(%x)\n", smpoff);
+  cs->position= fx_get_byte_param(cs->command) * 256 * 2;
 
-  if (smpoff >= (get_sample_length(mc, cs->ismp) - 1))
-    {
-      DEBUG_ERROR("smpoff >= length\n");
-      smpoff = 0;
-    }
-
-  cs->smpoff = smpoff;
+  length = mc->s_length[cs->sample - 1];
+  if (cs->position > length)
+    cs->position = length - 1;
 }
 
 
 static void
-fx_apply_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -504,15 +495,15 @@ fx_apply_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 /* volume slide */
 
 static void
-fx_init_volume_slide(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->fx_data),
-	       fx_get_second_param(cs->fx_data));
+  DEBUG_PRINTF("(%x, %x)\n", fx_get_first_param(cs->command),
+	       fx_get_second_param(cs->command));
 }
 
 
 static void
-fx_apply_volume_slide(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -521,20 +512,18 @@ fx_apply_volume_slide(mod_context_t* mc, chan_state_t* cs)
 /* position jump */
 
 static void
-fx_init_position_jump(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_position_jump(mod_context_t* mc, chan_state_t* cs)
 {
   /* continue at song position */
 
-  const unsigned int pos = fx_get_byte_param(cs->fx_data);
-  
-  DEBUG_PRINTF("(%x)\n", pos);
-
-  //cs->ipat = mc->song[pos & 0x7f];
+  mc->break_on_next_idiv = 1;
+  mc->break_next_idiv = 0;
+  mc->break_next_songpos = fx_get_byte_param(cs->command) & 0x7f;
 }
 
 
 static void
-fx_apply_position_jump(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_position_jump(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -543,21 +532,19 @@ fx_apply_position_jump(mod_context_t* mc, chan_state_t* cs)
 /* set volume */
 
 static void
-fx_init_set_volume(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_set_volume(mod_context_t* mc, chan_state_t* cs)
 {
   /* legal volumes from 0 to 64 */
 
-  cs->volume = fx_get_byte_param(cs->fx_data);
+  cs->volume = fx_get_byte_param(cs->command);
 
-  DEBUG_PRINTF("(%u)\n", cs->volume);
-
-  if (cs->volume >= 64)
+  if (cs->volume > 64)
     cs->volume = 64;
 }
 
 
 static void
-fx_apply_set_volume(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_set_volume(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -566,46 +553,52 @@ fx_apply_set_volume(mod_context_t* mc, chan_state_t* cs)
 /* pattern break */
 
 static void
-fx_init_pattern_break(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_pattern_break(mod_context_t* mc, chan_state_t* cs)
 {
   /* continue at next pattern, new division */
 
-  //cs->ipat += 1;
+  mc->break_on_next_idiv = 1;
 
-#if 0
-  cs->idiv =
-    (fx_get_first_param(cs->fx_data) * 10 +
-     fx_get_second_param(cs->fx_data)) &
+  mc->break_next_idiv =
+    (fx_get_first_param(cs->command) * 10 +
+     fx_get_second_param(cs->command)) &
     0x3f;
 
-  DEBUG_PRINTF("(%x)\n", cs->idiv);
-#endif
+  mc->break_next_songpos = mc->songpos + 1;
 }
 
 
 static void
-fx_apply_pattern_break(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_pattern_break(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
 
 
-/* set speed */
+/* set speed (tempo) */
 
 static void
-fx_init_set_speed(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
 {
-  unsigned int speed = fx_get_byte_param(cs->fx_data);
+  const unsigned int speed = fx_get_byte_param(cs->command);
 
-  DEBUG_PRINTF("(%x)\n", speed);
-
-  if (speed == 0)
-    speed = 1;
+  if (speed <= 32)
+    {
+      mc->ticksperdivision = speed;
+    }
+  else
+    {
+      // set beats per minute, at 6 ticks per division and 4 divisions is one beat
+      // samples per tick is really what we want to set here
+      // number of ticks per beat is 4*mc->ticksperdivision
+      mc->tickspersecond = speed * 4 * mc->ticksperdivision / 60;
+      mc->samplespertick= 48000 / mc->tickspersecond;
+    }
 }
 
 
 static void
-fx_apply_set_speed(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_set_speed(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_ENTER();
 }
@@ -613,13 +606,13 @@ fx_apply_set_speed(mod_context_t* mc, chan_state_t* cs)
 
 /* unknown effect */
 
-static void fx_init_unknown(mod_context_t* mc, struct chan_state* cs)
+static void fx_ondiv_unknown(mod_context_t* mc, struct chan_state* cs)
 {
-  DEBUG_PRINTF("unknown fx(0x%03x)\n", cs->fx_data);
+  DEBUG_PRINTF("unknown fx(0x%03x)\n", cs->command);
 }
 
 
-static void fx_apply_unknown(mod_context_t* mc, struct chan_state* cs)
+static void fx_ontick_unknown(mod_context_t* mc, struct chan_state* cs)
 {
   DEBUG_ENTER();
 }
@@ -630,14 +623,14 @@ static void fx_apply_unknown(mod_context_t* mc, struct chan_state* cs)
 struct fx_info
 {
   const char* name;
-  void (*init)(mod_context_t*, chan_state_t*);
-  void (*apply)(mod_context_t*, chan_state_t*);
+  void (*ondiv)(mod_context_t*, chan_state_t*);
+  void (*ontick)(mod_context_t*, chan_state_t*);
 };
 
 
 static const struct fx_info fx_table[] =
   {
-#define EXPAND_FX_INFO_ENTRY(S) { #S, fx_init_ ## S, fx_apply_ ## S }
+#define EXPAND_FX_INFO_ENTRY(S) { #S, fx_ondiv_ ## S, fx_ontick_ ## S }
 
     /* base effects */
 
@@ -679,7 +672,7 @@ static const struct fx_info fx_table[] =
   };
 
 
-static inline unsigned int fx_get_index(unsigned int fx)
+static inline unsigned int fx_get_index(uint32_t fx)
 {
   /* get the fx table index */
 
@@ -689,7 +682,7 @@ static inline unsigned int fx_get_index(unsigned int fx)
 }
 
 
-static inline const struct fx_info* fx_get_info(unsigned int fx)
+static inline const struct fx_info* fx_get_info(uint32_t fx)
 {
   return &fx_table[fx_get_index(fx)];
 }
@@ -702,16 +695,16 @@ static inline const char* fx_get_name(unsigned int fx)
 
 
 static inline void
-fx_init(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv(mod_context_t* mc, chan_state_t* cs)
 {
-  fx_get_info(cs->fx_data)->init(mc, cs);
+  fx_get_info(cs->command)->ondiv(mc, cs);
 }
 
 
 static inline void
-fx_apply(mod_context_t* mc, chan_state_t* cs)
+fx_ontick(mod_context_t* mc, chan_state_t* cs)
 {
-  fx_get_info(cs->fx_data)->apply(mc, cs);
+  fx_get_info(cs->command)->ontick(mc, cs);
 }
 
 
@@ -724,358 +717,14 @@ chan_init_state(chan_state_t* cs, unsigned int ichan, unsigned int ipat)
   memset(cs, 0, sizeof(struct chan_state));
 
   cs->ichan = ichan;
-  cs->freq=48000;
+  cs->freq = 48000;
 
-  cs->volume=0x40;
-  cs->sample=1;
+  cs->volume = 0x40;
+  cs->sample = 1;
 
   CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
 }
 
-
-
-
-#if 0
-
-
-
-
-static inline int is_end_of_repeating_sample(const mod_context_t* mc,
-					     const struct chan_state* cs,
-					     unsigned int ismp)
-{
-  return
-    cs->smpoff >
-    get_sample_repeat_offset(mc, ismp) +
-    get_sample_repeat_length(mc, ismp) -
-    MOD_CHAN_COUNT;
-}
-
-
-static inline int is_end_of_sample(const mod_context_t* mc,
-				   const struct chan_state* cs,
-				   unsigned int ismp)
-{
-  if ( ! CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING) )
-    return cs->smpoff > (get_sample_length(mc, ismp) - MOD_CHAN_COUNT);
-
-  return is_end_of_repeating_sample(mc, cs, ismp);
-}
-
-
-static inline unsigned int
-get_remaining_sample_length(const mod_context_t* mc,
-			    const struct chan_state* cs)
-{
-  if ( ! CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING) )
-    return get_sample_length(mc, cs->ismp) - cs->smpoff;
-
-  return
-    get_sample_repeat_length(mc, cs->ismp) -
-    (cs->smpoff - get_sample_repeat_offset(mc, cs->ismp));
-}
-
-
-static inline unsigned int
-get_remaining_sample_count(const mod_context_t* mc,
-			   const struct chan_state* cs)
-{
-  return get_remaining_sample_length(mc, cs) / MOD_CHAN_COUNT;
-}
-
-
-static inline const void* get_chan_sample_data(const mod_context_t* mc,
-					       const struct chan_state* cs)
-{
-  return (const int8_t*)get_sample_data(mc, cs->ismp) + cs->smpoff;
-}
-
-
-static unsigned int compute_resampling_ratio(unsigned int nsmps_at_48khz,
-					     unsigned int nsmps_at_smprate)
-{
-  /* todo: round to the nearest ratio */
-
-  const unsigned int ratio = nsmps_at_48khz / nsmps_at_smprate;
-  return ratio ? ratio : 1;
-}
-
-
-static int16_t mix(int8_t a, int8_t b)
-{
-  /* todo: optimize */
-
-  int16_t sum = (int16_t)a + (int16_t)b;
-
-#if 0
-  {
-#define MIN_INT8 -128
-#define MAX_INT8 127
-
-  if (sum < MIN_INT8)
-    sum = MIN_INT8;
-  else if (sum > MAX_INT8)
-    sum = MAX_INT8;
-  }
-#endif
-
-  return sum;
-}
-
-
-static void mix_8bits_4chans_buffer(int8_t* ibuf, unsigned int nsmps)
-{
-  /* todo: must be moved in the resample routine. */
-
-  for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
-    {
-      int16_t* const p = (int16_t*)ibuf;
-
-      p[0] = p[1] =
-	(int16_t)((int32_t)ibuf[0] +
-		  (int32_t)ibuf[1] +
-		  (int32_t)ibuf[2] +
-		  (int32_t)ibuf[3]);
-    }
-}
-
-
-static void*
-resample(int16_t* obuf, const int8_t* ibuf,
-	 unsigned int nsmps,
-	 unsigned int ratio,
-	 unsigned int ichan)
-{
-  /* obuf is sle16 interleaved
-     ibuf is 8bits pcm
-     nsmps the input sample count
-     ratio the resampling ratio
-   */
-
-  /* todo: smoothing / averaging function */
-
-#if 0
-
-  size_t roff = 0;
-  unsigned int i;
-
-  ibuf += ichan;
-
-  switch (ichan)
-    {
-    case 1:
-      /* unalign buffers and fallthrough (dont break) */
-      roff = 1;
-      ++obuf;
-
-    case 0:
-      for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
-	for (i = 0; i < ratio; ++i, obuf += STEREO_CHAN_COUNT)
-	  *obuf = *ibuf;
-      break;
-
-    case 2:
-      /* unalign buffers and fallthrough (dont break) */
-      roff = 1;
-      ++obuf;
-
-    case 3:
-      /* assume chan0 sample already stored */
-      for (; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
-	for (i = 0; i < ratio; ++i, obuf += STEREO_CHAN_COUNT)
-	  *obuf = mix(*obuf, *ibuf);
-      break;
-    }
-
-  return obuf - roff;
-
-#else /* 4tracks -> mono -> stereo */
-
-  /* use the output buffer as a temporary one
-     to store 8bits pcm samples. when chan 3,
-     mix all the previously stored samples.
-   */
-
-  unsigned int i;
-
-  obuf += ichan;
-
-  for (obuf += ichan; nsmps; --nsmps, ibuf += MOD_CHAN_COUNT)
-    for (i = 0; i < ratio; ++i, obuf += STEREO_CHAN_COUNT)
-      *obuf = *ibuf;
-
-  obuf -= ichan;
-
-  return obuf;
-
-#endif
-}
-
-
-static inline unsigned int
-nsmps_from_smprate_to_48khz(unsigned int nsmps, unsigned int smprate)
-{
-  const unsigned int count = (48000 * nsmps) / smprate;
-  return count ? count : 1;
-}
-
-
-static inline unsigned int
-nsmps_from_48khz_to_smprate(unsigned int nsmps, unsigned int smprate)
-{
-  const unsigned int count = (smprate * nsmps) / 48000;
-  return count ? count : 1;
-}
-
-
-int chan_produce_samples(struct chan_state* cs,
-			 mod_context_t* mc,
-			 int16_t* obuf,
-			 unsigned int nsmps)
-{
-  /* produce nsmps 48khz samples */
-
- produce_more_samples:
-
-  if (CHAN_HAS_FLAG(cs, IS_SAMPLE_STARTING))
-    {
-      /* this is a new sample/division. we initialize
-	 here whatever is needed to make progress in
-	 the division, esp. the per chan state.
-      */
-
-      const unsigned char* chan_data;
-      unsigned int ismp;
-      unsigned int period;
-
-      /* extract channel data */
-
-      chan_data = get_chan_data(mc, cs);
-
-      ismp = (chan_data[0] & 0xf0) | (chan_data[2] >> 4);
-      period = ((unsigned int)(chan_data[0] & 0x0f) << 8) | chan_data[1];
-
-      /* todo: is this necessary */
-
-      if (!cs->ismp && !ismp)
-	return 0;
-
-      CHAN_CLEAR_FLAG(cs, IS_SAMPLE_STARTING);
-
-      /* decrement since samples are 1 based */
-
-      if (ismp)
-	cs->ismp = ismp - 1;
-
-      /* sample volume */
-
-      cs->volume = get_sample_volume(mc, cs->ismp);
-
-      /* sample rate (bytes per sec to send). todo, finetune. */
-
-      if (period)
-	cs->smprate = PAL_SYNC_RATE / (period * 2);
-
-      /* fx initialization is done here */
-
-      cs->fx_data = ((unsigned int)(chan_data[2] & 0x0f) << 8) | chan_data[3];
-      fx_init(mc, cs);
-    }
-  else if (CHAN_HAS_FLAG(cs, IS_SAMPLE_REPEATING))
-    {
-      if (is_end_of_repeating_sample(mc, cs, cs->ismp))
-	cs->smpoff = get_sample_repeat_offset(mc, cs->ismp);
-    }
-  else if (cs->smpoff >= get_sample_length(mc, cs->ismp))
-    {
-      /* sample done, is a repeating one */
-
-      if (get_sample_repeat_length(mc, cs->ismp))
-	{
-	  CHAN_SET_FLAG(cs, IS_SAMPLE_REPEATING);
-	  cs->smpoff = get_sample_repeat_offset(mc, cs->ismp);
-	}
-      else
-	{
-	  /* next sample */
-
-	  CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
-
-	  cs->smpoff = 0;
-
-	  /* next pattern on end of division */
-	}
-
-      goto produce_more_samples;
-    }
-
-  /* apply the effect. see above for initialization. */
-
-  fx_apply(mc, cs);
-
-  /* generate nsmps 48khz samples */
-
-  while (nsmps)
-    {
-      unsigned int nsmps_at_smprate;
-      unsigned int nsmps_at_48khz;
-      unsigned int ratio;
-
-      /* how much can we produce with the current sample */
-
-      nsmps_at_smprate = get_remaining_sample_count(mc, cs);
-
-      if (!nsmps_at_smprate)
-	{
-	  /* no more, sample done */
-
-	  cs->smpoff = get_sample_length(mc, cs->ismp);
-	}
-
-      if (is_end_of_sample(mc, cs, cs->ismp))
-	goto produce_more_samples;
-
-      /* to remove. when only 2 chans, this is set
-	 to 0 but it should be detected earlier
-      */
-      if (!cs->smprate)
-	return 0;
-
-      /* how much can we produce at 48khz */
-
-      nsmps_at_48khz =
-	nsmps_from_smprate_to_48khz(nsmps_at_smprate, cs->smprate);
-
-      /* count would be greater than needed */
-
-      if (nsmps_at_48khz > nsmps)
-	{
-	  nsmps_at_48khz = nsmps;
-
-	  nsmps_at_smprate =
-	    nsmps_from_48khz_to_smprate(nsmps_at_48khz, cs->smprate);
-	}
-
-      ratio =
-	compute_resampling_ratio(nsmps_at_48khz, nsmps_at_smprate);
-
-      DEBUG_PRINTF("{%u, %u}: %u - %u - %x\n", cs->ismp, cs->smpoff, nsmps_at_48khz, cs->smprate, cs->flags);
-
-      obuf =
-	resample(obuf, get_chan_sample_data(mc, cs),
-		 nsmps_at_smprate, ratio, cs->ichan);
-
-      nsmps -= nsmps_at_48khz;
-
-      cs->smpoff += nsmps_at_smprate * MOD_CHAN_COUNT;
-    }
-
-  return 0;
-}
-
-
-
-#endif
 
 
 /* exported */
@@ -1107,21 +756,6 @@ void mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 
   mod_produce(mc,obuf,nsmps);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct sample_desc* sd)
@@ -1260,58 +894,16 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
       cs->position=cs->fraction=0;
     }
 
-  uint32_t fcmd=(fx>>8);
-  uint32_t fdata=fx&0xff;
-  uint32_t length;
-  switch(fcmd)
-    {
-    case 0xc: // Set volume
-      if(fdata>64) fdata=64;
-      cs->volume=fdata;
-      //printf("volume %d %02d\n",cs->ichan,cs->volume);
-      break;
-    case 0xb: // position jump
-      mc->break_on_next_idiv=1;
-      mc->break_next_idiv=0;
-      mc->break_next_songpos=fdata&0x7f;
-      break;
-    case 0xd: // pattern break;
-      mc->break_on_next_idiv=1;
-      mc->break_next_idiv=(fdata&0xf0)*10+(fdata&0xf);
-      mc->break_next_songpos=mc->songpos+1;
-      break;
-    case 0x9: 
-      cs->position=fdata*256*2;
-      length=mc->s_length[cs->sample-1];
-      if(cs->position>length) 
-	{ cs->position=length-1; }
-      break;
-    case 0xe:
-      switch(fdata>>4)
-	{
-	case 0x9: printf("retrigger sample\n"); break;
-	case 0xd: printf("delay sample\n"); break;
-	}
-      break;
-    case 0xf: // Set tempo
-      if(fdata<=32) mc->ticksperdivision=fdata;
-      else 
-	{
-	  // set beats per minute, at 6 ticks per division and 4 divisions is one beat
-	  // samples per tick is really what we want to set here
-	  // number of ticks per beat is 4*mc->ticksperdivision
-	  mc->tickspersecond=fdata*4*mc->ticksperdivision/60;
-	  mc->samplespertick=48000/mc->tickspersecond;
-	}
-      break;
-    }
+  // per division command processing
+  fx_ondiv(mc, cs);
   
   return 0;
 }
 
-static void chan_process_tick(chan_state_t* cs,mod_context_t*mc)
+static void chan_process_tick(chan_state_t* cs, mod_context_t* mc)
 {
-  // process effects
+  // per tick command processing
+  fx_ontick(mc, cs);
 }
 
 static void mod_process_channels(mod_context_t* mc)
