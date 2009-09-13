@@ -90,9 +90,9 @@ void intro_csv()
 	for(y=0;y<=HMESHLAST;y++)
 		for(x=0;x<=VMESHLAST;x++) {
 			src_vertices[y][x].x = x*vga_hres/HMESHLAST;
-			src_vertices[y][x].y = y*vga_vres/VMESHLAST;
+			src_vertices[y][x].y = y*vga_vres/VMESHLAST - 1;
 			dst_vertices[y][x].x = x*vga_hres/HMESHLAST;
-			dst_vertices[y][x].y = y*vga_vres/VMESHLAST - 1;
+			dst_vertices[y][x].y = y*vga_vres/VMESHLAST;
 		}
 
 	tmu_task.flags = 0;
