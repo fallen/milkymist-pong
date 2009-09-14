@@ -457,6 +457,8 @@ fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
 
   int note;
 
+  cs->arpindex = 0;
+
   if (cs->note >= MAX_NOTE)
     {
       /* no previous note */
@@ -482,8 +484,6 @@ fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
 
   cs->arpnotes[2] = pitch_table[note][cs->finetune];
 
-  cs->arpindex = 0;
-
   DEBUG_FX("notes: %u, %u, %u\n", cs->arpnotes[0], cs->arpnotes[1], cs->arpnotes[2]);
 }
 
@@ -494,7 +494,7 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
   if (cs->arpindex == 3)
     cs->arpindex = 0;
 
-  DEBUG_FX("arpindex: %u\n", cs->arpindex);
+  DEBUG_FX("[%u] arpindex: %u\n", cs->ichan, cs->arpindex);
 
   cs->period = cs->arpnotes[cs->arpindex++];
 
@@ -507,9 +507,9 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
-  cs->periodstep = fx_get_byte_param(cs->command);
+  cs->periodstep = (int)fx_get_byte_param(cs->command);
 
-  DEBUG_FX("periodstep: %u\n", cs->periodstep);
+  DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
 
 
@@ -525,13 +525,13 @@ fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
       goto do_update_period;
     }
 
-  if (cs->period - cs->periodstep < MIN_NOTE_PERIOD)
+  if (cs->period - (unsigned int)cs->periodstep < MIN_NOTE_PERIOD)
     {
       cs->period = MIN_NOTE_PERIOD;
       goto do_update_period;
     }
 
-  cs->period -= cs->periodstep;
+  cs->period -= (unsigned int)cs->periodstep;
 
  do_update_period:
   update_chan_period(cs);
@@ -543,9 +543,9 @@ fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
-  cs->periodstep = fx_get_byte_param(cs->command);
+  cs->periodstep = (unsigned int)fx_get_byte_param(cs->command);
 
-  DEBUG_FX("periodstep: %u\n", cs->periodstep);
+  DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
 
 
@@ -555,38 +555,69 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 #define MAX_NOTE_PERIOD 856 /* C1 note freq */
 
   /* int overflow */
-  if (cs->period + cs->periodstep < cs->period)
+  if (cs->period + (unsigned int)cs->periodstep < cs->period)
     {
       cs->period = MAX_NOTE_PERIOD;
       goto do_update_period;
     }
 
-  if (cs->period + cs->periodstep > MAX_NOTE_PERIOD)
+  if (cs->period + (unsigned int)cs->periodstep > MAX_NOTE_PERIOD)
     {
       cs->period = MAX_NOTE_PERIOD;
       goto do_update_period;
     }
 
-  cs->period += cs->periodstep;
+  cs->period += (unsigned int)cs->periodstep;
 
  do_update_period:
   update_chan_period(cs);
 }
 
 
-/* slide to note */
+/* portamento (slide to note) */
 
 static void
-fx_ondiv_slide_to_note(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_portamento(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+  cs->periodstep = (int)fx_get_byte_param(cs->command);
+
+  if (cs->periodstep == 0)
+    return ;
+
+  cs->portaend = cs->period;
+
+  DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
 
 
 static void
-fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_portamento(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_ENTER();
+  int period;
+
+  if (cs->periodstep == 0)
+    return ;
+
+  period = (int)cs->period + cs->periodstep;
+
+  if (cs->periodstep > 0)
+    {
+      if (period < (unsigned int)cs->portaend)
+	goto fallthru_case;
+    }
+  else
+    {
+      if (period > (unsigned int)cs->portaend)
+	goto fallthru_case;
+    }
+
+  /* portaend reached */
+  cs->periodstep = 0;
+  period = cs->portaend;
+
+ fallthru_case:
+  cs->period = period;
+  update_chan_period(cs);
 }
 
 
@@ -647,14 +678,14 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 /* continue slide to note do volume slide */
 
 static void
-fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+fx_ondiv_portamento_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
   DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
 }
 
 
 static void
-fx_ontick_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+fx_ontick_portamento_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
 }
 
@@ -889,9 +920,9 @@ static const struct fx_info fx_table[] =
     EXPAND_FX_INFO_ENTRY(arpeggio),
     EXPAND_FX_INFO_ENTRY(slide_up),
     EXPAND_FX_INFO_ENTRY(slide_down),
-    EXPAND_FX_INFO_ENTRY(slide_to_note),
+    EXPAND_FX_INFO_ENTRY(portamento),
     EXPAND_FX_INFO_ENTRY(vibrato),
-    EXPAND_FX_INFO_ENTRY(slide_to_note_volume_slide),
+    EXPAND_FX_INFO_ENTRY(portamento_volume_slide),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
