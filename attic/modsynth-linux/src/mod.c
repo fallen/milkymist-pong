@@ -250,8 +250,6 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
       mc->s_length[i]=be16_to_host(&(mc->sdescs[i].length))*2;
       mc->s_roff[i]=be16_to_host(&(mc->sdescs[i].roff))*2;
       mc->s_rlength[i]=be16_to_host(&(mc->sdescs[i].rlength))*2;
-
-      DEBUG_PRINTF("%02x %04x %04x %04x\n",i+1,mc->s_length[i],mc->s_roff[i],mc->s_rlength[i]);
     }
   
 
@@ -423,12 +421,12 @@ static void init_pitch_table(void)
       k = j < 0 ? j + 16 : j;
 
 #define AMIGA_CLOCKFREQ 3575872
-      base = AMIGA_CLOCKFREQ / 440.0 / 4.0 / pow(2.0, j / 96.0);
+      base = AMIGA_CLOCKFREQ / 440.0 / 4.0 / powf(2.0, j / 96.0);
 
       for (i = 0; i < MAX_NOTE; i++)
 	{
 	  pitch = base / pow(2.0, i / 12.0);
-	  pitch_table[i][k] = floor(pitch + 0.5);
+	  pitch_table[i][k] = floorf(pitch + 0.5);
 	}
     }
 }
@@ -1043,7 +1041,7 @@ void mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 }
 
 
-static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct sample_desc* sd)
+static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const struct sample_desc* sd)
 {
   uint16_t roff=mc->s_roff[cs->sample-1];
   uint16_t rlength=mc->s_rlength[cs->sample-1];
@@ -1101,7 +1099,7 @@ static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
       l+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
       l*=2;
       r*=2;
-      
+
       (*obuf++)=l;
       (*obuf++)=r;
     }
