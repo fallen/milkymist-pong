@@ -9,7 +9,7 @@ HEADERS=$(addsuffix .h, $(filter-out $(TARGET),$(NAMES)))
 CC=gcc
 
 CFLAGS=-Wall -DUSE_MMAP -DLITTLE_ENDIAN -D_DEBUG=0 -ggdb
-LDFLAGS= -lm
+LDFLAGS=
 
 DEPFILE=depends.source
 
