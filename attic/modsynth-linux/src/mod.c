@@ -609,6 +609,54 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
 }
 
 
+/* fineslide up */
+
+static void
+fx_ondiv_fineslide_up(mod_context_t* mc, chan_state_t* cs)
+{
+  /* no actual sliding */
+
+  const unsigned int fineslide = fx_get_second_param(cs->command);
+
+  /* int overflow */
+  if (cs->period + fineslide < cs->period)
+    {
+      cs->period = 856;
+      return ;
+    }
+
+  cs->period += fineslide;
+
+  /* dont drop below B3 note */
+  if (cs->period > 856)
+    cs->period = 856;
+}
+
+
+/* fineslide down */
+
+static void
+fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
+{
+  /* no actual sliding */
+
+  const unsigned int fineslide = fx_get_second_param(cs->command);
+
+  /* int underflow */
+  if (cs->period - fineslide > cs->period)
+    {
+      cs->period = 113;
+      return ;
+    }
+
+  cs->period -= fineslide;
+
+  /* dont drop below B3 note */
+  if (cs->period < 113)
+    cs->period = 113;
+}
+
+
 /* unknown effect */
 
 static void fx_ondiv_unknown(mod_context_t* mc, struct chan_state* cs)
@@ -659,8 +707,8 @@ static const struct fx_info fx_table[] =
     /* extended effects */
 
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_up),
+    EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_down),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
