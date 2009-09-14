@@ -692,10 +692,7 @@ fx_ondiv_set_volume(mod_context_t* mc, chan_state_t* cs)
   /* legal volumes from 0 to 64 */
 
   cs->volume = fx_get_byte_param(cs->command);
-
-
-  if (cs->volume > 64)
-    cs->volume = 64;
+  cs->volume = LIMIT(0,cs->volume,64);
 
   DEBUG_FX("volume: %u\n", cs->volume);
 }
@@ -842,8 +839,8 @@ static const struct fx_info fx_table[] =
     EXPAND_FX_INFO_ENTRY(slide_to_note),
     EXPAND_FX_INFO_ENTRY(vibrato),
     EXPAND_FX_INFO_ENTRY(slide_to_note_volume_slide),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY(vibrato_volume_slide),
+    EXPAND_FX_INFO_ENTRY(tremolo),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY_NOTICK(set_sample_offset),
     EXPAND_FX_INFO_ENTRY(volume_slide),
@@ -858,19 +855,19 @@ static const struct fx_info fx_table[] =
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_up),
     EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_down),
-    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY_NOTICK(glissando),
     EXPAND_FX_INFO_ENTRY_NOTICK(set_vibrato_waveform),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_finetune_value),
+    EXPAND_FX_INFO_ENTRY_NOTICK(loop_pattern),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_tremolo_waveform),
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown)
+    EXPAND_FX_INFO_ENTRY(retrigger_sample),
+    EXPAND_FX_INFO_ENTRY(fine_volume_slide_up),
+    EXPAND_FX_INFO_ENTRY(fine_volume_slide_down),
+    EXPAND_FX_INFO_ENTRY(cut_sample),
+    EXPAND_FX_INFO_ENTRY(delay_sample),
+    EXPAND_FX_INFO_ENTRY(delay_pattern),
+    EXPAND_FX_INFO_ENTRY(invert_loop)
   };
 
 
