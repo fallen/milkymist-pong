@@ -574,7 +574,7 @@ fx_ondiv_portamento(mod_context_t* mc, chan_state_t* cs)
   if (cs->periodstep == 0)
     return ;
 
-  cs->portaend = cs->period;
+  cs->periodtarget = cs->period;
 
   DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
@@ -592,18 +592,18 @@ fx_ontick_portamento(mod_context_t* mc, chan_state_t* cs)
 
   if (cs->periodstep > 0)
     {
-      if (period < (unsigned int)cs->portaend)
+      if ((unsigned int)period < cs->periodtarget)
 	goto fallthru_case;
     }
   else
     {
-      if (period > (unsigned int)cs->portaend)
+      if ((unsigned int)period > cs->periodtarget)
 	goto fallthru_case;
     }
 
-  /* portaend reached */
+  /* periodtarget reached */
   cs->periodstep = 0;
-  period = cs->portaend;
+  period = cs->periodtarget;
 
  fallthru_case:
   cs->period = period;
@@ -665,24 +665,27 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 }
 
 
-<<<<<<< HEAD:attic/modsynth-linux/src/mod.c
-/* continue slide to note do volume slide */
+/* continue portamento slide to note do volume slide */
+
+static void fx_ondiv_volume_slide(mod_context_t*, chan_state_t*);
+static void fx_ontick_volume_slide(mod_context_t*, chan_state_t*);
+
 
 static void
 fx_ondiv_portamento_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
+  fx_ondiv_portamento(mc,cs);
 }
 
 
 static void
 fx_ontick_portamento_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
+  fx_ontick_volume_slide(mc,cs);
+  fx_ontick_portamento(mc,cs);
 }
 
 
-=======
->>>>>>> 0a67899c8e78b4eb05703ecaba6f5ab9d7990392:attic/modsynth-linux/src/mod.c
 /* set sample offset */
 
 static void
@@ -834,25 +837,6 @@ fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
   cs->vibtable = vibrato_table[param & 0x3];
   cs->vibretrig=!(param&4);
 }
-
-
-
-/* continue slide to note do volume slide */
-
-static void
-fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
-{
-  fx_ondiv_volume_slide(mc,cs);
-}
-
-
-static void
-fx_ontick_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
-{
-  fx_ontick_volume_slide(mc,cs);
-  fx_ontick_slide_to_note(mc,cs);
-}
-
 
 
 /* unknown effect */
