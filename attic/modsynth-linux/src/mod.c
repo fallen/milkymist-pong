@@ -604,14 +604,14 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
-  fx_ondiv_slide_down(mc, cs);
+  DEBUG_ENTER();
 }
 
 
 static void
 fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
-  fx_ontick_slide_down(mc, cs);
+  DEBUG_ENTER();
 }
 
 
