@@ -634,21 +634,6 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 }
 
 
-/* continue slide to note do volume slide */
-
-static void
-fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
-{
-  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
-}
-
-
-static void
-fx_ontick_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
-{
-}
-
-
 /* set sample offset */
 
 static void
@@ -800,6 +785,25 @@ fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
   cs->vibtable = vibrato_table[param & 0x3];
   cs->vibretrig=!(param&4);
 }
+
+
+
+/* continue slide to note do volume slide */
+
+static void
+fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
+  fx_ondiv_volume_slide(mc,cs);
+}
+
+
+static void
+fx_ontick_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
+  fx_ontick_volume_slide(mc,cs);
+  fx_ontick_slide_to_note(mc,cs);
+}
+
 
 
 /* unknown effect */
