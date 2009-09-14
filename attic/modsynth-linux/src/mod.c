@@ -224,6 +224,8 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
   size_t size;
   struct reader_context rc;
 
+  memset(mc, 0, sizeof(mod_context_t));
+
   reader_init(&rc, data, length);
 
   /* skip title */

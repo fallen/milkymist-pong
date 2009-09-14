@@ -37,7 +37,7 @@ int main(int ac, char** av)
   pcm_buf_t* pcm_buf = NULL;
   mod_context_t mc;
 
-  if (file_open(&fc, "../data/3.mod") == -1)
+  if (file_open(&fc, "../data/8.mod") == -1)
     goto on_error;
 
   if (mod_init(&mc, file_get_data(&fc), file_get_size(&fc)) == -1)
