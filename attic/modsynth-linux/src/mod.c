@@ -406,11 +406,11 @@ static inline unsigned int fx_get_byte_param(uint32_t fx)
 
 /* note table */
 
-#define NUMBER_NOTES 120
-#define NUMBER_FINETUNES 17
+#define MAX_NOTE 120
+#define MAX_FINETUNE 17
 
 
-static uint16_t pitch_table[NUMBER_NOTES][NUMBER_FINETUNES];
+static uint16_t pitch_table[MAX_NOTE][MAX_FINETUNE];
 
 
 static void init_pitch_table(void)
@@ -425,7 +425,7 @@ static void init_pitch_table(void)
 #define AMIGA_CLOCKFREQ 3575872
       base = AMIGA_CLOCKFREQ / 440.0 / 4.0 / pow(2.0, j / 96.0);
 
-      for (i = 0; i < NUMBER_NOTES; i++)
+      for (i = 0; i < MAX_NOTE; i++)
 	{
 	  pitch = base / pow(2.0, i / 12.0);
 	  pitch_table[i][k] = floor(pitch + 0.5);
@@ -443,11 +443,11 @@ static unsigned int find_note_by_pitch(unsigned int pitch)
   unsigned int a, b, i;
 
   if (pitch == 0)
-    return NUMBER_NOTES;
+    return MAX_NOTE;
 
   a = 0;
 
-  b = NUMBER_NOTES - 1;
+  b = MAX_NOTE - 1;
 
   while((int)b - (int)a > 1)
     {
@@ -468,7 +468,7 @@ static unsigned int find_note_by_pitch(unsigned int pitch)
   if (pitch_table[b][0] + FUZZ >= pitch)
     return b;
 
-  return NUMBER_NOTES;
+  return MAX_NOTE;
 }
 
 
@@ -482,37 +482,42 @@ fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
      table of period values for each finetunevalue.
    */
 
-#if 0
-
   int note;
+
+  if (cs->note >= MAX_NOTE)
+    {
+      /* no previous note */
+
+      cs->arpnotes[0] = cs->period;
+      cs->arpnotes[1] = cs->arpnotes[0];
+      cs->arpnotes[2] = cs->arpnotes[0];
+
+      return ;
+    }
 
   cs->arpnotes[0] = pitch_table[cs->note][cs->finetune];
 
   note = cs->note + fx_get_first_param(cs->command);
-  if (note >= NUMBER_NOTES)
-    note = NUMBER_NOTES - 1;
+  if (note >= MAX_NOTE)
+    note = MAX_NOTE - 1;
 
   cs->arpnotes[1] = pitch_table[note][cs->finetune];
 
   note = cs->note + fx_get_second_param(cs->command);
-  if (note >= NUMBER_NOTES)
-    note = NUMBER_NOTES - 1;
+  if (note >= MAX_NOTE)
+    note = MAX_NOTE - 1;
 
   cs->arpnotes[2] = pitch_table[note][cs->finetune];
 
   cs->arpindex = 0;
 
   DEBUG_FX("notes: %u, %u, %u\n", cs->arpnotes[0], cs->arpnotes[1], cs->arpnotes[2]);
-
-#endif
 }
 
 
 static void
 fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
-#if 0
-
   if (cs->arpindex == 3)
     cs->arpindex = 0;
 
@@ -521,8 +526,6 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
   cs->period = cs->arpnotes[cs->arpindex++];
 
   update_chan_period(cs);
-
-#endif
 }
 
 
@@ -603,28 +606,68 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
+  fx_ondiv_slide_down(mc, cs);
 }
 
 
 static void
 fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
+  fx_ontick_slide_down(mc, cs);
 }
 
 
-/* vibrato */
+/* vibrato. from tracker/commands.c. */
+
+static int vibrato_table[3][64] = 
+  {
+    {
+      0,50,100,149,196,241,284,325,362,396,426,452,473,490,502,510,512,
+      510,502,490,473,452,426,396,362,325,284,241,196,149,100,50,0,-49,
+      -99,-148,-195,-240,-283,-324,-361,-395,-425,-451,-472,-489,-501,
+      -509,-511,-509,-501,-489,-472,-451,-425,-395,-361,-324,-283,-240,
+      -195,-148,-99,-49
+    },
+    {
+      512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,
+      512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,-512,-512,
+      -512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512, 
+      -512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,
+      -512,-512
+    },
+    {
+      0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256,272,288,
+      304,320,336,352,368,384,400,416,432,448,464,480,496,-512,-496,-480,
+      -464,-448,-432,-416,-400,-384,-368,-352,-336,-320,-304,-288,-272,-256,
+      -240,-224,-208,-192,-176,-160,-144,-128,-112,-96,-80,-64,-48,-32,-16
+    }
+  };
+
 
 static void
 fx_ondiv_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
-  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
+  unsigned int param;
+
+  param = fx_get_first_param(cs->command);
+  if (param)
+    cs->vibrate = param;
+
+  param = fx_get_second_param(cs->command);
+  if (param)
+    cs->vibdepth = param;
+
+  if (cs->vibretrig)
+    cs->viboffset = 0;
 }
 
 
 static void
 fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
+  cs->viboffset = (cs->viboffset + cs->vibrate) & (0x40 - 1);
+  cs->period += (cs->vibtable[cs->viboffset] * cs->vibdepth) / 256;
+  update_chan_period(cs);
 }
 
 
@@ -825,6 +868,21 @@ fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
 }
 
 
+/* vibrato waveform  */
+
+static void
+fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
+{
+  const unsigned int param = fx_get_second_param(cs->command);
+
+  cs->vibtable = vibrato_table[param & 0x3];
+  if (param & 0x4)
+    cs->vibretrig = 0;
+  else
+    cs->vibretrig = 1;
+}
+
+
 /* unknown effect */
 
 static void fx_ondiv_unknown(mod_context_t* mc, struct chan_state* cs)
@@ -878,7 +936,7 @@ static const struct fx_info fx_table[] =
     EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_up),
     EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_down),
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_vibrato_waveform),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
@@ -942,6 +1000,10 @@ chan_init_state(chan_state_t* cs, unsigned int ichan)
 
   cs->volume = 0x40;
   cs->sample = 1;
+
+  cs->note = MAX_NOTE;
+
+  cs->vibtable = vibrato_table[0];
 
   CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
 }
