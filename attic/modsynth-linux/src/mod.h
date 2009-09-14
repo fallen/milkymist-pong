@@ -51,7 +51,7 @@ struct chan_state
   unsigned int freq;
 
   /* volume step */
-  unsigned int volume;
+  int volume;
   int volstep;
 
   /* offset in the sample in bytes */
@@ -73,6 +73,7 @@ struct chan_state
 
   uint32_t period;       // current period as in channel in pattern
   int32_t periodstep;	 // periode step for slide up or down
+  uint32_t periodtarget;
   uint32_t command;      // current fx/command 12-bits
   uint32_t sample;       // selected sample number (starting at 1 as in channel in pattern)
   unsigned int finetune;
@@ -88,9 +89,6 @@ struct chan_state
   unsigned int vibdepth;
   unsigned int vibretrig;
   const int* vibtable;
-
-  /* portamento effect */
-  unsigned int portaend;
 
   uint32_t position;     // sample offset (the 32.0 of 32.16)
   uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)

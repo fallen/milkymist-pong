@@ -24,6 +24,10 @@
 #include "mod.h"
 #include "debug.h"
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define LIMIT(a,b,c) (((b)<(a))?(a):(((b)>(c))?(c):(b)))
+
 
 
 #define PAL_SYNC_RATE 7093789.2
@@ -191,25 +195,6 @@ get_sample_repeat_length(const mod_context_t* mc, unsigned int ismp)
 
   return len * BYTES_PER_WORD;
 }
-
-#if 0
-static inline const void* get_chan_data(const mod_context_t* mc, const struct chan_state* cs)
-{
-#define DIVS_PER_PAT 64
-#define CHANS_PER_DIV 4
-#define BYTES_PER_CHAN 4
-#define BYTES_PER_DIV (CHANS_PER_DIV * BYTES_PER_CHAN)
-#define BYTES_PER_PAT (DIVS_PER_PAT * BYTES_PER_DIV) /* 1024 */
-
-  return
-    (const unsigned char*)mc->pdata
- +
-    cs->ipat * BYTES_PER_PAT +
-    cs->idiv * BYTES_PER_DIV +
-    cs->ichan * BYTES_PER_CHAN
-;
-}
-#endif
 
 
 static int load_file(mod_context_t* mc, const void* data, size_t length)
@@ -392,6 +377,11 @@ static inline unsigned int fx_get_first_param(uint32_t fx)
 static inline unsigned int fx_get_second_param(uint32_t fx)
 {
   return fx & 0x0f;
+}
+
+static inline int8_t fx_get_second_param_signed(uint32_t fx)
+{
+  return ((int8_t)(fx<<4))>>4;
 }
 
 
@@ -695,13 +685,7 @@ fx_ontick_portamento_volume_slide(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
-  uint32_t length;
-
   cs->position = fx_get_byte_param(cs->command) * 256 * 2;
-
-  length = mc->s_length[cs->sample - 1];
-  if (cs->position > length)
-    cs->position = length - 1;
 
   DEBUG_FX("position: %u\n", cs->position);
 }
@@ -724,18 +708,8 @@ fx_ondiv_volume_slide(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ontick_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
-  /* integer underflow */
-  if (cs->volstep < 0 && (cs->volume + cs->volstep > cs->volume))
-    return ;
-
-  /* max volume reached */
-  if (cs->volume + cs->volstep > 64)
-    {
-      cs->volume = 64;
-      return ;
-    }
-
-  cs->volume += cs->volstep;
+  cs->volume+=cs->volstep;
+  cs->volume=LIMIT(0,cs->volume,64);
 
   DEBUG_FX("volume: %u\n", cs->volume);
 }
@@ -764,6 +738,7 @@ fx_ondiv_set_volume(mod_context_t* mc, chan_state_t* cs)
   /* legal volumes from 0 to 64 */
 
   cs->volume = fx_get_byte_param(cs->command);
+
 
   if (cs->volume > 64)
     cs->volume = 64;
@@ -824,22 +799,9 @@ static void
 fx_ondiv_fineslide_up(mod_context_t* mc, chan_state_t* cs)
 {
   /* no actual sliding */
+  cs->period+=fx_get_second_param(cs->command);
+  cs->period=MIN(cs->period,MAX_NOTE_PERIOD);
 
-  const unsigned int fineslide = fx_get_second_param(cs->command);
-
-  /* int overflow */
-  if (cs->period + fineslide < cs->period)
-    {
-      cs->period = MAX_NOTE_PERIOD;
-      goto do_update_period;
-    }
-
-  cs->period += fineslide;
-
-  if (cs->period > MAX_NOTE_PERIOD)
-    cs->period = MAX_NOTE_PERIOD;
-
- do_update_period:
   DEBUG_FX("period: %u\n", cs->period);
   update_chan_period(cs);
 }
@@ -851,22 +813,9 @@ static void
 fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
 {
   /* no actual sliding */
+  cs->period-=fx_get_second_param(cs->command);
+  cs->period=MAX(cs->period,MIN_NOTE_PERIOD);
 
-  const unsigned int fineslide = fx_get_second_param(cs->command);
-
-  /* int underflow */
-  if (cs->period - fineslide > cs->period)
-    {
-      cs->period = MIN_NOTE_PERIOD;
-      goto do_update_period;
-    }
-
-  cs->period -= fineslide;
-
-  if (cs->period < MIN_NOTE_PERIOD)
-    cs->period = MIN_NOTE_PERIOD;
-
- do_update_period:
   DEBUG_FX("period: %u\n", cs->period);
   update_chan_period(cs);
 }
@@ -880,10 +829,7 @@ fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
   const unsigned int param = fx_get_second_param(cs->command);
 
   cs->vibtable = vibrato_table[param & 0x3];
-  if (param & 0x4)
-    cs->vibretrig = 0;
-  else
-    cs->vibretrig = 1;
+  cs->vibretrig=!(param&4);
 }
 
 
@@ -1101,11 +1047,10 @@ static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
       r+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
       cs=&mc->cstates[3];
       l+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
-      l*=2;
-      r*=2;
-
-      (*obuf++)=l;
-      (*obuf++)=r;
+      //l*=2;
+      //r*=2;
+      (*obuf++)=l+r;
+      (*obuf++)=r+l;
     }
 }
 
@@ -1163,7 +1108,14 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
 
   if (period)
     {
-      cs->period = period;
+      if((fx&0xf00)==0x300)
+	// portamento so we set target instead
+	cs->periodtarget = period;
+      else
+	{	
+	  cs->periodtarget=0;
+	  cs->period = period;
+	}	  
       update_chan_period(cs);
     }
 

@@ -36,7 +36,7 @@ run:
 	ffplay out.wav
 
 play:
-	./main ../data/8.mod
+	./main ../data/3.mod
 	sox -L -r 48000 -t raw -b 2 -s -2 -c 2 output.raw -t wav out.wav 
 	ffplay out.wav
 
