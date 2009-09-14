@@ -404,32 +404,8 @@ static inline unsigned int fx_get_byte_param(uint32_t fx)
 
 /* note table */
 
-#define MAX_NOTE 120
-#define MAX_FINETUNE 17
 
-
-static uint16_t pitch_table[MAX_NOTE][MAX_FINETUNE];
-
-
-static void init_pitch_table(void)
-{
-  double base, pitch;
-  int i, j, k;
-
-  for (j = -8; j < 8; j++)
-    {
-      k = j < 0 ? j + 16 : j;
-
-#define AMIGA_CLOCKFREQ 3575872
-      base = AMIGA_CLOCKFREQ / 440.0 / 4.0 / powf(2.0, j / 96.0);
-
-      for (i = 0; i < MAX_NOTE; i++)
-	{
-	  pitch = base / pow(2.0, i / 12.0);
-	  pitch_table[i][k] = floorf(pitch + 0.5);
-	}
-    }
-}
+#include "pitch_table.h"
 
 
 static unsigned int find_note_by_pitch(unsigned int pitch)
@@ -1014,8 +990,6 @@ int mod_init(mod_context_t* mc, const void* data, size_t length)
 {
   if (load_file(mc, data, length) == -1)
     return -1;
-
-  init_pitch_table();
 
   chan_init_state(&mc->cstates[0], 0);
   chan_init_state(&mc->cstates[1], 1);
