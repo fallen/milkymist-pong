@@ -329,7 +329,8 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
 
   /* check there is enough room for samples */
 
-  if (reader_check_size(&rc, size) == -1)
+  // strangely 9.mod is 2 bytes shorter than size?!?
+  if (reader_check_size(&rc, size-2) == -1)
     {
       DEBUG_ERROR("reader_check_size(%u, %u)\n", (uint32_t)size, (uint32_t)rc.size);
       goto on_error;
@@ -910,6 +911,8 @@ fx_ontick_retrigger_sample(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_fine_volume_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
+  cs->volume+=fx_get_second_param(cs->command);
+  cs->volume=LIMIT(0,cs->volume,64);
 }
 
 /* fine volume slide down */
@@ -917,6 +920,8 @@ fx_ondiv_fine_volume_slide_up(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_fine_volume_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
+  cs->volume-=fx_get_second_param(cs->command);
+  cs->volume=LIMIT(0,cs->volume,64);
 }
 
 /* cut sample */

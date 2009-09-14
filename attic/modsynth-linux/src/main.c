@@ -37,11 +37,18 @@ int main(int ac, char** av)
   pcm_buf_t* pcm_buf = NULL;
   mod_context_t mc;
 
+  printf("ac=%d,av=%s\n",ac,av[1]);
   if (file_open(&fc, ac > 1 ? av[1] : "../data/3.mod") == -1)
-    goto on_error;
+    {
+      printf("failed opening file\n");
+      goto on_error;
+    }
 
   if (mod_init(&mc, file_get_data(&fc), file_get_size(&fc)) == -1)
-    goto on_error;
+    {
+      printf("failed mod_init\n");
+      goto on_error;
+    }
 
   pcm_alloc_buf(&pcm_buf, 48000);
 
@@ -62,7 +69,6 @@ int main(int ac, char** av)
   }
 
  on_error:
-
   if (pcm_buf != NULL)
     pcm_free_buf(pcm_buf);
 
