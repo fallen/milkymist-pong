@@ -394,12 +394,25 @@ static inline unsigned int fx_get_byte_param(uint32_t fx)
 static void
 fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
+  /* note, note+x, note+y then return to orginal note */
+
+  cs->arpnotes[0] = cs->period;
+  cs->arpnotes[1] = cs->period + fx_get_first_param(cs->command);
+  cs->arpnotes[2] = cs->period + fx_get_second_param(cs->command);
+
+  cs->arpindex = 0;
+
+  DEBUG_FX("notes: %u, %u, %u\n", cs->arpnotes[0], cs->arpnotes[1], cs->arpnotes[2]);
 }
 
 
 static void
 fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
+  if (cs->arpindex == 3)
+    cs->arpindex = 0;
+
+  cs->period = cs->arpnotes[cs->arpindex++];
 }
 
 
@@ -409,6 +422,8 @@ static void
 fx_ondiv_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
   cs->periodstep = fx_get_byte_param(cs->command);
+
+  DEBUG_FX("periodstep: %u\n", cs->periodstep);
 }
 
 
@@ -419,10 +434,10 @@ fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
   if (cs->period - cs->periodstep > cs->period)
     return ;
 
-  /* dont drop below note B3 (period 113) */
-  if (cs->period - cs->periodstep < 113)
+#define MIN_NOTE_PERIOD 113 /* B3 note freq */
+  if (cs->period - cs->periodstep < MIN_NOTE_PERIOD)
     {
-      cs->period = 113;
+      cs->period = MIN_NOTE_PERIOD;
       return ;
     }
 
@@ -436,6 +451,8 @@ static void
 fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
   cs->periodstep = fx_get_byte_param(cs->command);
+
+  DEBUG_FX("periodstep: %u\n", cs->periodstep);
 }
 
 
@@ -446,10 +463,10 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
   if (cs->period + cs->periodstep < cs->period)
     return ;
 
-  /* dont drop above note C1 (period 856) */
-  if (cs->period + cs->periodstep > 856)
+#define MAX_NOTE_PERIOD 856 /* C1 note freq */
+  if (cs->period + cs->periodstep > MAX_NOTE_PERIOD)
     {
-      cs->period = 856;
+      cs->period = MAX_NOTE_PERIOD;
       return ;
     }
 
@@ -462,6 +479,7 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
 }
 
 
@@ -476,6 +494,7 @@ fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
 }
 
 
@@ -490,6 +509,7 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
 }
 
 
@@ -506,11 +526,13 @@ fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
   uint32_t length;
 
-  cs->position= fx_get_byte_param(cs->command) * 256 * 2;
+  cs->position = fx_get_byte_param(cs->command) * 256 * 2;
 
   length = mc->s_length[cs->sample - 1];
   if (cs->position > length)
     cs->position = length - 1;
+
+  DEBUG_FX("position: %u\n", cs->position);
 }
 
 
@@ -523,22 +545,28 @@ fx_ondiv_volume_slide(mod_context_t* mc, chan_state_t* cs)
 
   if (!cs->volstep)
     cs->volstep = fx_get_second_param(cs->command) * -1;
+
+  DEBUG_FX("volstep: %d\n", cs->volstep);
 }
 
 
 static void
 fx_ontick_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
-  /* integer underflow or max volume reached */
+  /* integer underflow */
   if (cs->volstep < 0 && (cs->volume + cs->volstep > cs->volume))
     return ;
-  else if (cs->volume + cs->volstep > 64)
+
+  /* max volume reached */
+  if (cs->volume + cs->volstep > 64)
     {
       cs->volume = 64;
       return ;
     }
 
   cs->volume += cs->volstep;
+
+  DEBUG_FX("volume: %u\n", cs->volume);
 }
 
 
@@ -552,6 +580,8 @@ fx_ondiv_position_jump(mod_context_t* mc, chan_state_t* cs)
   mc->break_on_next_idiv = 1;
   mc->break_next_idiv = 0;
   mc->break_next_songpos = fx_get_byte_param(cs->command) & 0x7f;
+
+  DEBUG_FX("sonpos: %u\n", mc->break_next_songpos);
 }
 
 
@@ -566,6 +596,8 @@ fx_ondiv_set_volume(mod_context_t* mc, chan_state_t* cs)
 
   if (cs->volume > 64)
     cs->volume = 64;
+
+  DEBUG_FX("volume: %u\n", cs->volume);
 }
 
 
@@ -584,6 +616,8 @@ fx_ondiv_pattern_break(mod_context_t* mc, chan_state_t* cs)
     0x3f;
 
   mc->break_next_songpos = mc->songpos + 1;
+
+  DEBUG_FX("next_songpos: %u\n", mc->break_next_songpos);
 }
 
 
@@ -597,6 +631,8 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
   if (speed <= 32)
     {
       mc->ticksperdivision = speed;
+
+      DEBUG_FX("ticksperdivision: %u\n", mc->ticksperdivision);
     }
   else
     {
@@ -605,6 +641,8 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
       // number of ticks per beat is 4*mc->ticksperdivision
       mc->tickspersecond = speed * 4 * mc->ticksperdivision / 60;
       mc->samplespertick = 48000 / mc->tickspersecond;
+
+      DEBUG_FX("tickspersecond: %u, samplespertick: %u\n", mc->tickspersecond, mc->samplespertick);
     }
 }
 
@@ -621,15 +659,17 @@ fx_ondiv_fineslide_up(mod_context_t* mc, chan_state_t* cs)
   /* int overflow */
   if (cs->period + fineslide < cs->period)
     {
-      cs->period = 856;
+      cs->period = MAX_NOTE_PERIOD;
+      DEBUG_FX("period: %u\n", cs->period);
       return ;
     }
 
   cs->period += fineslide;
 
-  /* dont drop below B3 note */
-  if (cs->period > 856)
-    cs->period = 856;
+  if (cs->period > MAX_NOTE_PERIOD)
+    cs->period = MAX_NOTE_PERIOD;
+
+  DEBUG_FX("period: %u\n", cs->period);
 }
 
 
@@ -645,15 +685,17 @@ fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
   /* int underflow */
   if (cs->period - fineslide > cs->period)
     {
-      cs->period = 113;
+      cs->period = MIN_NOTE_PERIOD;
+      DEBUG_FX("period: %u\n", cs->period);
       return ;
     }
 
   cs->period -= fineslide;
 
-  /* dont drop below B3 note */
-  if (cs->period < 113)
-    cs->period = 113;
+  if (cs->period < MIN_NOTE_PERIOD)
+    cs->period = MIN_NOTE_PERIOD;
+
+  DEBUG_FX("period: %u\n", cs->period);
 }
 
 
@@ -661,7 +703,7 @@ fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
 
 static void fx_ondiv_unknown(mod_context_t* mc, struct chan_state* cs)
 {
-  DEBUG_PRINTF("unknown fx(0x%02x)\n", (cs->command & 0xf00) >> 8);
+  DEBUG_FX("unknown: 0x%02x\n", (cs->command & 0xf00) >> 8);
 }
 
 

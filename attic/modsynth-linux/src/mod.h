@@ -76,6 +76,10 @@ struct chan_state
   uint32_t command;      // current fx/command 12-bits
   uint32_t sample;       // selected sample number (starting at 1 as in channel in pattern)
 
+  /* arpeggio effect */
+  uint32_t arpindex;
+  uint32_t arpnotes[3];
+
   uint32_t position;     // sample offset (the 32.0 of 32.16)
   uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)
   uint32_t samplestep;   // 16.16 to add to position.fraction for each step of sample

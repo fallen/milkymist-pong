@@ -20,6 +20,7 @@
 # define DEBUG_LEAVE() fprintf(stderr, "[<] %s\n", __FUNCTION__)
 # define DEBUG_PRINTF(s, ...) fprintf(stderr, "[?] %s_%u: " s, __FUNCTION__, __LINE__, ## __VA_ARGS__)
 # define DEBUG_ERROR(s, ...) fprintf(stderr, "[!] %s_%u: " s, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+# define DEBUG_FX(s, ...) fprintf(stderr, "[fx] %s_%u: " s, __FUNCTION__, __LINE__, ## __VA_ARGS__)
 
 #else
 
@@ -27,6 +28,7 @@
 # define DEBUG_LEAVE()
 # define DEBUG_PRINTF(s, ...)
 # define DEBUG_ERROR(s, ...)
+# define DEBUG_FX(s, ...)
 
 #endif /* ! _DEBUG */
 
