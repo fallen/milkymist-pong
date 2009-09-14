@@ -19,10 +19,15 @@
  */
 
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "mod.h"
 #include "debug.h"
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define LIMIT(a,b,c) (((b)<(a))?(a):(((b)>(c))?(c):(b)))
 
 
 
@@ -164,11 +169,10 @@ static inline unsigned int get_sample_volume(const mod_context_t* mc,
 }
 
 
-static inline int get_sample_finetune(const mod_context_t* mc,
-				      unsigned int ismp)
+static inline unsigned int get_sample_finetune(const mod_context_t* mc,
+					       unsigned int ismp)
 {
-  const int finetune = get_sample_desc(mc, ismp)->finetune & 0x0f;
-  return finetune & 0x8 ? -((finetune & 0x7) + 1) : finetune & 0x7;
+  return get_sample_desc(mc, ismp)->finetune & 0x0f;
 }
 
 
@@ -205,6 +209,8 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
   size_t size;
   struct reader_context rc;
 
+  memset(mc, 0, sizeof(mod_context_t));
+
   reader_init(&rc, data, length);
 
   /* skip title */
@@ -229,8 +235,6 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
       mc->s_length[i]=be16_to_host(&(mc->sdescs[i].length))*2;
       mc->s_roff[i]=be16_to_host(&(mc->sdescs[i].roff))*2;
       mc->s_rlength[i]=be16_to_host(&(mc->sdescs[i].rlength))*2;
-
-      //printf("%02x %04x %04x %04x\n",i+1,mc->s_length[i],mc->s_roff[i],mc->s_rlength[i]);
     }
   
 
@@ -269,7 +273,7 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
     if (npats < *pos)
       npats = *pos;
 
-  npats+=1;
+  npats += 1;
   mc->npats = npats;
 
   reader_skip_safe(&rc, 128);
@@ -340,6 +344,19 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
 }
 
 
+/* change the channel period */
+
+static unsigned int find_note_by_pitch(unsigned int);
+
+static void inline update_chan_period(chan_state_t* cs)
+{
+  cs->smprate = PAL_SYNC_RATE / (cs->period * 2);
+  cs->samplestep = (cs->smprate << 16) / 48000;
+  cs->note = find_note_by_pitch(cs->period);
+}
+
+
+
 /* fx handling. the idea is to have 2 functions per
    effect: init and apply. at the very beginning of a
    pattern division, the effect gets a chance of
@@ -363,10 +380,83 @@ static inline unsigned int fx_get_second_param(uint32_t fx)
   return fx & 0x0f;
 }
 
+static inline int8_t fx_get_second_param_signed(uint32_t fx)
+{
+  return ((int8_t)(fx<<4))>>4;
+}
+
 
 static inline unsigned int fx_get_byte_param(uint32_t fx)
 {
   return fx & 0xff;
+}
+
+
+/* note table */
+
+#define MAX_NOTE 120
+#define MAX_FINETUNE 17
+
+
+static uint16_t pitch_table[MAX_NOTE][MAX_FINETUNE];
+
+
+static void init_pitch_table(void)
+{
+  double base, pitch;
+  int i, j, k;
+
+  for (j = -8; j < 8; j++)
+    {
+      k = j < 0 ? j + 16 : j;
+
+#define AMIGA_CLOCKFREQ 3575872
+      base = AMIGA_CLOCKFREQ / 440.0 / 4.0 / powf(2.0, j / 96.0);
+
+      for (i = 0; i < MAX_NOTE; i++)
+	{
+	  pitch = base / pow(2.0, i / 12.0);
+	  pitch_table[i][k] = floorf(pitch + 0.5);
+	}
+    }
+}
+
+
+static unsigned int find_note_by_pitch(unsigned int pitch)
+{
+  /* binary search the node given the pitch */
+
+#define FUZZ 2
+
+  unsigned int a, b, i;
+
+  if (pitch == 0)
+    return MAX_NOTE;
+
+  a = 0;
+
+  b = MAX_NOTE - 1;
+
+  while((int)b - (int)a > 1)
+    {
+      i = (a + b) / 2;
+
+      if (pitch_table[i][0] == pitch)
+	return i;
+
+      if (pitch_table[i][0] > pitch)
+	a = i;
+      else
+	b = i;
+    }
+
+  if (pitch_table[a][0] - FUZZ <= pitch)
+    return a;
+
+  if (pitch_table[b][0] + FUZZ >= pitch)
+    return b;
+
+  return MAX_NOTE;
 }
 
 
@@ -375,12 +465,55 @@ static inline unsigned int fx_get_byte_param(uint32_t fx)
 static void
 fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
+  /* note, note+x, note+y then return to orginal note.
+     finetune is implemented by switching to a different
+     table of period values for each finetunevalue.
+   */
+
+  int note;
+
+  if (cs->note >= MAX_NOTE)
+    {
+      /* no previous note */
+
+      cs->arpnotes[0] = cs->period;
+      cs->arpnotes[1] = cs->arpnotes[0];
+      cs->arpnotes[2] = cs->arpnotes[0];
+
+      return ;
+    }
+
+  cs->arpnotes[0] = pitch_table[cs->note][cs->finetune];
+
+  note = cs->note + fx_get_first_param(cs->command);
+  if (note >= MAX_NOTE)
+    note = MAX_NOTE - 1;
+
+  cs->arpnotes[1] = pitch_table[note][cs->finetune];
+
+  note = cs->note + fx_get_second_param(cs->command);
+  if (note >= MAX_NOTE)
+    note = MAX_NOTE - 1;
+
+  cs->arpnotes[2] = pitch_table[note][cs->finetune];
+
+  cs->arpindex = 0;
+
+  DEBUG_FX("notes: %u, %u, %u\n", cs->arpnotes[0], cs->arpnotes[1], cs->arpnotes[2]);
 }
 
 
 static void
 fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
+  if (cs->arpindex == 3)
+    cs->arpindex = 0;
+
+  DEBUG_FX("arpindex: %u\n", cs->arpindex);
+
+  cs->period = cs->arpnotes[cs->arpindex++];
+
+  update_chan_period(cs);
 }
 
 
@@ -390,24 +523,33 @@ static void
 fx_ondiv_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
   cs->periodstep = fx_get_byte_param(cs->command);
+
+  DEBUG_FX("periodstep: %u\n", cs->periodstep);
 }
 
 
 static void
 fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
+#define MIN_NOTE_PERIOD 113 /* B3 note freq */
+
   /* int underflow */
   if (cs->period - cs->periodstep > cs->period)
-    return ;
-
-  /* dont drop below note B3 (period 113) */
-  if (cs->period - cs->periodstep < 113)
     {
-      cs->period = 113;
-      return ;
+      cs->period = MIN_NOTE_PERIOD;
+      goto do_update_period;
     }
 
-  cs->period -= cs->periodstep ;
+  if (cs->period - cs->periodstep < MIN_NOTE_PERIOD)
+    {
+      cs->period = MIN_NOTE_PERIOD;
+      goto do_update_period;
+    }
+
+  cs->period -= cs->periodstep;
+
+ do_update_period:
+  update_chan_period(cs);
 }
 
 
@@ -417,24 +559,33 @@ static void
 fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
   cs->periodstep = fx_get_byte_param(cs->command);
+
+  DEBUG_FX("periodstep: %u\n", cs->periodstep);
 }
 
 
 static void
 fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
+#define MAX_NOTE_PERIOD 856 /* C1 note freq */
+
   /* int overflow */
   if (cs->period + cs->periodstep < cs->period)
-    return ;
-
-  /* dont drop above note C1 (period 856) */
-  if (cs->period + cs->periodstep > 856)
     {
-      cs->period = 856;
-      return ;
+      cs->period = MAX_NOTE_PERIOD;
+      goto do_update_period;
     }
 
-  cs->period += cs->periodstep ;
+  if (cs->period + cs->periodstep > MAX_NOTE_PERIOD)
+    {
+      cs->period = MAX_NOTE_PERIOD;
+      goto do_update_period;
+    }
+
+  cs->period += cs->periodstep;
+
+ do_update_period:
+  update_chan_period(cs);
 }
 
 
@@ -443,26 +594,68 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_ENTER();
 }
 
 
 static void
 fx_ontick_slide_to_note(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_ENTER();
 }
 
 
-/* vibrato */
+/* vibrato. from tracker/commands.c. */
+
+static int vibrato_table[3][64] = 
+  {
+    {
+      0,50,100,149,196,241,284,325,362,396,426,452,473,490,502,510,512,
+      510,502,490,473,452,426,396,362,325,284,241,196,149,100,50,0,-49,
+      -99,-148,-195,-240,-283,-324,-361,-395,-425,-451,-472,-489,-501,
+      -509,-511,-509,-501,-489,-472,-451,-425,-395,-361,-324,-283,-240,
+      -195,-148,-99,-49
+    },
+    {
+      512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,
+      512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,-512,-512,
+      -512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512, 
+      -512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,
+      -512,-512
+    },
+    {
+      0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256,272,288,
+      304,320,336,352,368,384,400,416,432,448,464,480,496,-512,-496,-480,
+      -464,-448,-432,-416,-400,-384,-368,-352,-336,-320,-304,-288,-272,-256,
+      -240,-224,-208,-192,-176,-160,-144,-128,-112,-96,-80,-64,-48,-32,-16
+    }
+  };
+
 
 static void
 fx_ondiv_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
+  unsigned int param;
+
+  param = fx_get_first_param(cs->command);
+  if (param)
+    cs->vibrate = param;
+
+  param = fx_get_second_param(cs->command);
+  if (param)
+    cs->vibdepth = param;
+
+  if (cs->vibretrig)
+    cs->viboffset = 0;
 }
 
 
 static void
 fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
+  cs->viboffset = (cs->viboffset + cs->vibrate) & (0x40 - 1);
+  cs->period += (cs->vibtable[cs->viboffset] * cs->vibdepth) / 256;
+  update_chan_period(cs);
 }
 
 
@@ -471,6 +664,7 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("param: 0x%02x\n", fx_get_byte_param(cs->command));
 }
 
 
@@ -487,11 +681,13 @@ fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
   uint32_t length;
 
-  cs->position= fx_get_byte_param(cs->command) * 256 * 2;
+  cs->position = fx_get_byte_param(cs->command) * 256 * 2;
 
   length = mc->s_length[cs->sample - 1];
   if (cs->position > length)
     cs->position = length - 1;
+
+  DEBUG_FX("position: %u\n", cs->position);
 }
 
 
@@ -504,22 +700,18 @@ fx_ondiv_volume_slide(mod_context_t* mc, chan_state_t* cs)
 
   if (!cs->volstep)
     cs->volstep = fx_get_second_param(cs->command) * -1;
+
+  DEBUG_FX("volstep: %d\n", cs->volstep);
 }
 
 
 static void
 fx_ontick_volume_slide(mod_context_t* mc, chan_state_t* cs)
 {
-  /* integer underflow or max volume reached */
-  if (cs->volstep < 0 && (cs->volume + cs->volstep > cs->volume))
-    return ;
-  else if (cs->volume + cs->volstep > 64)
-    {
-      cs->volume = 64;
-      return ;
-    }
+  cs->volume+=cs->volstep;
+  cs->volume=LIMIT(0,cs->volume,64);
 
-  cs->volume += cs->volstep;
+  DEBUG_FX("volume: %u\n", cs->volume);
 }
 
 
@@ -533,6 +725,8 @@ fx_ondiv_position_jump(mod_context_t* mc, chan_state_t* cs)
   mc->break_on_next_idiv = 1;
   mc->break_next_idiv = 0;
   mc->break_next_songpos = fx_get_byte_param(cs->command) & 0x7f;
+
+  DEBUG_FX("songpos: %u\n", mc->break_next_songpos);
 }
 
 
@@ -545,8 +739,11 @@ fx_ondiv_set_volume(mod_context_t* mc, chan_state_t* cs)
 
   cs->volume = fx_get_byte_param(cs->command);
 
+
   if (cs->volume > 64)
     cs->volume = 64;
+
+  DEBUG_FX("volume: %u\n", cs->volume);
 }
 
 
@@ -565,6 +762,8 @@ fx_ondiv_pattern_break(mod_context_t* mc, chan_state_t* cs)
     0x3f;
 
   mc->break_next_songpos = mc->songpos + 1;
+
+  DEBUG_FX("next_songpos: %u\n", mc->break_next_songpos);
 }
 
 
@@ -578,6 +777,8 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
   if (speed <= 32)
     {
       mc->ticksperdivision = speed;
+
+      DEBUG_FX("ticksperdivision: %u\n", mc->ticksperdivision);
     }
   else
     {
@@ -586,7 +787,49 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
       // number of ticks per beat is 4*mc->ticksperdivision
       mc->tickspersecond = speed * 4 * mc->ticksperdivision / 60;
       mc->samplespertick = 48000 / mc->tickspersecond;
+
+      DEBUG_FX("tickspersecond: %u, samplespertick: %u\n", mc->tickspersecond, mc->samplespertick);
     }
+}
+
+
+/* fineslide up */
+
+static void
+fx_ondiv_fineslide_up(mod_context_t* mc, chan_state_t* cs)
+{
+  /* no actual sliding */
+  cs->period+=fx_get_second_param(cs->command);
+  cs->period=MIN(cs->period,MAX_NOTE_PERIOD);
+
+  DEBUG_FX("period: %u\n", cs->period);
+  update_chan_period(cs);
+}
+
+
+/* fineslide down */
+
+static void
+fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
+{
+  /* no actual sliding */
+  cs->period-=fx_get_second_param(cs->command);
+  cs->period=MAX(cs->period,MIN_NOTE_PERIOD);
+
+  DEBUG_FX("period: %u\n", cs->period);
+  update_chan_period(cs);
+}
+
+
+/* vibrato waveform  */
+
+static void
+fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
+{
+  const unsigned int param = fx_get_second_param(cs->command);
+
+  cs->vibtable = vibrato_table[param & 0x3];
+  cs->vibretrig=!(param&4);
 }
 
 
@@ -594,7 +837,7 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
 
 static void fx_ondiv_unknown(mod_context_t* mc, struct chan_state* cs)
 {
-  DEBUG_PRINTF("unknown fx(0x%02x)\n", (cs->command & 0xf00) >> 8);
+  DEBUG_FX("unknown: 0x%02x\n", (cs->command & 0xf00) >> 8);
 }
 
 
@@ -640,10 +883,10 @@ static const struct fx_info fx_table[] =
     /* extended effects */
 
     EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_up),
+    EXPAND_FX_INFO_ENTRY_NOTICK(fineslide_down),
     EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
-    EXPAND_FX_INFO_ENTRY(unknown),
+    EXPAND_FX_INFO_ENTRY_NOTICK(set_vibrato_waveform),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
     EXPAND_FX_INFO_ENTRY(unknown),
@@ -698,15 +941,19 @@ fx_ontick(mod_context_t* mc, chan_state_t* cs)
 /* on per channel state */
 
 static inline void
-chan_init_state(chan_state_t* cs, unsigned int ichan, unsigned int ipat)
+chan_init_state(chan_state_t* cs, unsigned int ichan)
 {
-  memset(cs, 0, sizeof(struct chan_state));
+  memset(cs, 0, sizeof(chan_state_t));
 
   cs->ichan = ichan;
   cs->freq = 48000;
 
   cs->volume = 0x40;
   cs->sample = 1;
+
+  cs->note = MAX_NOTE;
+
+  cs->vibtable = vibrato_table[0];
 
   CHAN_SET_FLAG(cs, IS_SAMPLE_STARTING);
 }
@@ -720,10 +967,12 @@ int mod_init(mod_context_t* mc, const void* data, size_t length)
   if (load_file(mc, data, length) == -1)
     return -1;
 
-  chan_init_state(&mc->cstates[0], 0, mc->ipat);
-  chan_init_state(&mc->cstates[1], 1, mc->ipat);
-  chan_init_state(&mc->cstates[2], 2, mc->ipat);
-  chan_init_state(&mc->cstates[3], 3, mc->ipat);
+  init_pitch_table();
+
+  chan_init_state(&mc->cstates[0], 0);
+  chan_init_state(&mc->cstates[1], 1);
+  chan_init_state(&mc->cstates[2], 2);
+  chan_init_state(&mc->cstates[3], 3);
 
   mod_reset(mc);
 
@@ -744,7 +993,7 @@ void mod_fetch(mod_context_t* mc, void* obuf, unsigned int nsmps)
 }
 
 
-static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct sample_desc* sd)
+static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const struct sample_desc* sd)
 {
   uint16_t roff=mc->s_roff[cs->sample-1];
   uint16_t rlength=mc->s_rlength[cs->sample-1];
@@ -753,15 +1002,12 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct 
   cs->position+=(cs->fraction>>16);
   cs->fraction&=0xffff;
 
-  
-  
   // check for end
   if(roff>2 || rlength>2)
     {
-      
       if(cs->position >= roff+rlength)
 	{
-	  //printf("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
+	  DEBUG_PRINTF("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
 	  cs->position=roff;
 	}
     }
@@ -803,9 +1049,8 @@ static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
       r+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
       cs=&mc->cstates[3];
       l+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
-      l*=2;
-      r*=2;
-      
+      //l*=2;
+      //r*=2;
       (*obuf++)=l+r;
       (*obuf++)=r+l;
     }
@@ -844,9 +1089,10 @@ static void mod_produce(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
 
 static const void* mod_get_playhead(mod_context_t* mc)
 {
-  uint32_t ipat=mc->song[mc->songpos];
+  const uint32_t ipat = mc->song[mc->songpos];
   const void *patternpos=mc->pdata+ipat*mc->patternsize;
   const void *playhead=patternpos+mc->idiv*mc->divisionsize;
+
   //DEBUG_PRINTF("%08x ",playhead-(void*)mc->sdescs+20);
   return playhead;
 }
@@ -860,21 +1106,21 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
 
   cs->periodstep = 0;
 
-  if(period)
+  cs->finetune = get_sample_finetune(mc, sample - 1);
+
+  if (period)
     {
-      cs->period=period;
-      // number of samples to step per second in source sample
-      cs->smprate = PAL_SYNC_RATE / (period * 2);
-      cs->samplestep = (cs->smprate<<16)/48000;
-      //DEBUG_PRINTF("%08x %08x\n",cs->smprate,cs->samplestep);
-      //printf("%08d %08d %08d %08d\n",cs->smprate,cs->samplestep,(cs->smprate*48000)>>16,(cs->samplestep*48000)>>16);
+      cs->period = period;
+      update_chan_period(cs);
     }
-  if(sample)
+
+  if (sample)
     {
       cs->sample=sample;
       cs->volume=mc->sdescs[sample-1].volume;
       cs->volstep = 0;
     }
+
   cs->command=fx;
 
   if(sample || period)
@@ -940,6 +1186,7 @@ static void __attribute__((unused)) chan_tick(chan_state_t* cs)
 static void mod_tick(mod_context_t* mc)
 {
   mc->tick++;
+
   if(mc->tick>=mc->ticksperdivision)
     {
       mc->tick=0;

@@ -51,7 +51,7 @@ struct chan_state
   unsigned int freq;
 
   /* volume step */
-  unsigned int volume;
+  int volume;
   int volstep;
 
   /* offset in the sample in bytes */
@@ -75,6 +75,19 @@ struct chan_state
   uint32_t periodstep;	 // periode step for slide up or down
   uint32_t command;      // current fx/command 12-bits
   uint32_t sample;       // selected sample number (starting at 1 as in channel in pattern)
+  unsigned int finetune;
+  unsigned int note;
+
+  /* arpeggio effect */
+  uint32_t arpindex;
+  uint32_t arpnotes[3];
+
+  /* vibrato effect */
+  unsigned int viboffset;
+  unsigned int vibrate;
+  unsigned int vibdepth;
+  unsigned int vibretrig;
+  const int* vibtable;
 
   uint32_t position;     // sample offset (the 32.0 of 32.16)
   uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)
@@ -116,7 +129,6 @@ struct mod_context
 
   /* current state */
   uint32_t songpos;                // which index in the song we are playing at
-  uint32_t ipat;                   
   uint32_t idiv;
   uint32_t tick;
 

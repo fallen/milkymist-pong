@@ -6,10 +6,10 @@ NAMES=$(basename $(SOURCES))
 OBJECTS=$(addsuffix .o, $(NAMES))
 HEADERS=$(addsuffix .h, $(filter-out $(TARGET),$(NAMES)))
 
-CC=g++
+CC=gcc
 
-CFLAGS=-Wall -DUSE_MMAP -DLITTLE_ENDIAN -D_DEBUG=1 -ggdb
-LDFLAGS=
+CFLAGS=-Wall -DUSE_MMAP -DLITTLE_ENDIAN -D_DEBUG=0 -ggdb
+LDFLAGS= -lm
 
 DEPFILE=depends.source
 
@@ -32,11 +32,11 @@ clean:	$(DEPFILE)
 dep:	$(DEPFILE)
 
 run:
-	./main | sox -L -r 48000 -t raw -b 2 -s -2 -c 2 - -t wav out.wav 
+	./main ../data/8.mod | sox -L -r 48000 -t raw -b 2 -s -2 -c 2 - -t wav out.wav 
 	ffplay out.wav
 
 play:
-	./main
+	./main ../data/3.mod
 	sox -L -r 48000 -t raw -b 2 -s -2 -c 2 output.raw -t wav out.wav 
 	ffplay out.wav
 
