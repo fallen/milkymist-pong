@@ -665,6 +665,7 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 }
 
 
+<<<<<<< HEAD:attic/modsynth-linux/src/mod.c
 /* continue slide to note do volume slide */
 
 static void
@@ -680,6 +681,8 @@ fx_ontick_portamento_volume_slide(mod_context_t* mc, chan_state_t* cs)
 }
 
 
+=======
+>>>>>>> 0a67899c8e78b4eb05703ecaba6f5ab9d7990392:attic/modsynth-linux/src/mod.c
 /* set sample offset */
 
 static void
@@ -831,6 +834,25 @@ fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
   cs->vibtable = vibrato_table[param & 0x3];
   cs->vibretrig=!(param&4);
 }
+
+
+
+/* continue slide to note do volume slide */
+
+static void
+fx_ondiv_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
+  fx_ondiv_volume_slide(mc,cs);
+}
+
+
+static void
+fx_ontick_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
+{
+  fx_ontick_volume_slide(mc,cs);
+  fx_ontick_slide_to_note(mc,cs);
+}
+
 
 
 /* unknown effect */
