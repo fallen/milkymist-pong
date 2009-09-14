@@ -574,8 +574,6 @@ fx_ondiv_portamento(mod_context_t* mc, chan_state_t* cs)
   if (cs->periodstep == 0)
     return ;
 
-  cs->periodtarget = cs->period;
-
   DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
 
