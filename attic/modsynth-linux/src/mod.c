@@ -654,13 +654,7 @@ fx_ontick_slide_to_note_volume_slide(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
-  uint32_t length;
-
   cs->position = fx_get_byte_param(cs->command) * 256 * 2;
-
-  length = mc->s_length[cs->sample - 1];
-  if (cs->position > length)
-    cs->position = length - 1;
 
   DEBUG_FX("position: %u\n", cs->position);
 }
@@ -1083,7 +1077,14 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
 
   if (period)
     {
-      cs->period = period;
+      if((fx&0xf00)==0x300)
+	// portamento so we set target instead
+	cs->periodtarget = period;
+      else
+	{	
+	  cs->periodtarget=0;
+	  cs->period = period;
+	}	  
       update_chan_period(cs);
     }
 
