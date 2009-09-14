@@ -19,6 +19,7 @@
  */
 
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "mod.h"
@@ -164,11 +165,10 @@ static inline unsigned int get_sample_volume(const mod_context_t* mc,
 }
 
 
-static inline int get_sample_finetune(const mod_context_t* mc,
-				      unsigned int ismp)
+static inline unsigned int get_sample_finetune(const mod_context_t* mc,
+					       unsigned int ismp)
 {
-  const int finetune = get_sample_desc(mc, ismp)->finetune & 0x0f;
-  return finetune & 0x8 ? -((finetune & 0x7) + 1) : finetune & 0x7;
+  return get_sample_desc(mc, ismp)->finetune & 0x0f;
 }
 
 
@@ -224,6 +224,8 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
   size_t size;
   struct reader_context rc;
 
+  memset(mc, 0, sizeof(mod_context_t));
+
   reader_init(&rc, data, length);
 
   /* skip title */
@@ -249,7 +251,7 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
       mc->s_roff[i]=be16_to_host(&(mc->sdescs[i].roff))*2;
       mc->s_rlength[i]=be16_to_host(&(mc->sdescs[i].rlength))*2;
 
-      //printf("%02x %04x %04x %04x\n",i+1,mc->s_length[i],mc->s_roff[i],mc->s_rlength[i]);
+      DEBUG_PRINTF("%02x %04x %04x %04x\n",i+1,mc->s_length[i],mc->s_roff[i],mc->s_rlength[i]);
     }
   
 
@@ -288,7 +290,7 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
     if (npats < *pos)
       npats = *pos;
 
-  npats+=1;
+  npats += 1;
   mc->npats = npats;
 
   reader_skip_safe(&rc, 128);
@@ -359,6 +361,19 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
 }
 
 
+/* change the channel period */
+
+static unsigned int find_note_by_pitch(unsigned int);
+
+static void inline update_chan_period(chan_state_t* cs)
+{
+  cs->smprate = PAL_SYNC_RATE / (cs->period * 2);
+  cs->samplestep = (cs->smprate << 16) / 48000;
+  cs->note = find_note_by_pitch(cs->period);
+}
+
+
+
 /* fx handling. the idea is to have 2 functions per
    effect: init and apply. at the very beginning of a
    pattern division, the effect gets a chance of
@@ -389,30 +404,125 @@ static inline unsigned int fx_get_byte_param(uint32_t fx)
 }
 
 
+/* note table */
+
+#define NUMBER_NOTES 120
+#define NUMBER_FINETUNES 17
+
+
+static uint16_t pitch_table[NUMBER_NOTES][NUMBER_FINETUNES];
+
+
+static void init_pitch_table(void)
+{
+  double base, pitch;
+  int i, j, k;
+
+  for (j = -8; j < 8; j++)
+    {
+      k = j < 0 ? j + 16 : j;
+
+#define AMIGA_CLOCKFREQ 3575872
+      base = AMIGA_CLOCKFREQ / 440.0 / 4.0 / pow(2.0, j / 96.0);
+
+      for (i = 0; i < NUMBER_NOTES; i++)
+	{
+	  pitch = base / pow(2.0, i / 12.0);
+	  pitch_table[i][k] = floor(pitch + 0.5);
+	}
+    }
+}
+
+
+static unsigned int find_note_by_pitch(unsigned int pitch)
+{
+  /* binary search the node given the pitch */
+
+#define FUZZ 2
+
+  unsigned int a, b, i;
+
+  if (pitch == 0)
+    return NUMBER_NOTES;
+
+  a = 0;
+
+  b = NUMBER_NOTES - 1;
+
+  while((int)b - (int)a > 1)
+    {
+      i = (a + b) / 2;
+
+      if (pitch_table[i][0] == pitch)
+	return i;
+
+      if (pitch_table[i][0] > pitch)
+	a = i;
+      else
+	b = i;
+    }
+
+  if (pitch_table[a][0] - FUZZ <= pitch)
+    return a;
+
+  if (pitch_table[b][0] + FUZZ >= pitch)
+    return b;
+
+  return NUMBER_NOTES;
+}
+
+
 /* arpeggio */
 
 static void
 fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
-  /* note, note+x, note+y then return to orginal note */
+  /* note, note+x, note+y then return to orginal note.
+     finetune is implemented by switching to a different
+     table of period values for each finetunevalue.
+   */
 
-  cs->arpnotes[0] = cs->period;
-  cs->arpnotes[1] = cs->period + fx_get_first_param(cs->command);
-  cs->arpnotes[2] = cs->period + fx_get_second_param(cs->command);
+#if 0
+
+  int note;
+
+  cs->arpnotes[0] = pitch_table[cs->note][cs->finetune];
+
+  note = cs->note + fx_get_first_param(cs->command);
+  if (note >= NUMBER_NOTES)
+    note = NUMBER_NOTES - 1;
+
+  cs->arpnotes[1] = pitch_table[note][cs->finetune];
+
+  note = cs->note + fx_get_second_param(cs->command);
+  if (note >= NUMBER_NOTES)
+    note = NUMBER_NOTES - 1;
+
+  cs->arpnotes[2] = pitch_table[note][cs->finetune];
 
   cs->arpindex = 0;
 
   DEBUG_FX("notes: %u, %u, %u\n", cs->arpnotes[0], cs->arpnotes[1], cs->arpnotes[2]);
+
+#endif
 }
 
 
 static void
 fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 {
+#if 0
+
   if (cs->arpindex == 3)
     cs->arpindex = 0;
 
+  DEBUG_FX("arpindex: %u\n", cs->arpindex);
+
   cs->period = cs->arpnotes[cs->arpindex++];
+
+  update_chan_period(cs);
+
+#endif
 }
 
 
@@ -430,18 +540,25 @@ fx_ondiv_slide_up(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
+#define MIN_NOTE_PERIOD 113 /* B3 note freq */
+
   /* int underflow */
   if (cs->period - cs->periodstep > cs->period)
-    return ;
+    {
+      cs->period = MIN_NOTE_PERIOD;
+      goto do_update_period;
+    }
 
-#define MIN_NOTE_PERIOD 113 /* B3 note freq */
   if (cs->period - cs->periodstep < MIN_NOTE_PERIOD)
     {
       cs->period = MIN_NOTE_PERIOD;
-      return ;
+      goto do_update_period;
     }
 
-  cs->period -= cs->periodstep ;
+  cs->period -= cs->periodstep;
+
+ do_update_period:
+  update_chan_period(cs);
 }
 
 
@@ -459,18 +576,25 @@ fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
+#define MAX_NOTE_PERIOD 856 /* C1 note freq */
+
   /* int overflow */
   if (cs->period + cs->periodstep < cs->period)
-    return ;
+    {
+      cs->period = MAX_NOTE_PERIOD;
+      goto do_update_period;
+    }
 
-#define MAX_NOTE_PERIOD 856 /* C1 note freq */
   if (cs->period + cs->periodstep > MAX_NOTE_PERIOD)
     {
       cs->period = MAX_NOTE_PERIOD;
-      return ;
+      goto do_update_period;
     }
 
-  cs->period += cs->periodstep ;
+  cs->period += cs->periodstep;
+
+ do_update_period:
+  update_chan_period(cs);
 }
 
 
@@ -581,7 +705,7 @@ fx_ondiv_position_jump(mod_context_t* mc, chan_state_t* cs)
   mc->break_next_idiv = 0;
   mc->break_next_songpos = fx_get_byte_param(cs->command) & 0x7f;
 
-  DEBUG_FX("sonpos: %u\n", mc->break_next_songpos);
+  DEBUG_FX("songpos: %u\n", mc->break_next_songpos);
 }
 
 
@@ -660,8 +784,7 @@ fx_ondiv_fineslide_up(mod_context_t* mc, chan_state_t* cs)
   if (cs->period + fineslide < cs->period)
     {
       cs->period = MAX_NOTE_PERIOD;
-      DEBUG_FX("period: %u\n", cs->period);
-      return ;
+      goto do_update_period;
     }
 
   cs->period += fineslide;
@@ -669,7 +792,9 @@ fx_ondiv_fineslide_up(mod_context_t* mc, chan_state_t* cs)
   if (cs->period > MAX_NOTE_PERIOD)
     cs->period = MAX_NOTE_PERIOD;
 
+ do_update_period:
   DEBUG_FX("period: %u\n", cs->period);
+  update_chan_period(cs);
 }
 
 
@@ -686,8 +811,7 @@ fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
   if (cs->period - fineslide > cs->period)
     {
       cs->period = MIN_NOTE_PERIOD;
-      DEBUG_FX("period: %u\n", cs->period);
-      return ;
+      goto do_update_period;
     }
 
   cs->period -= fineslide;
@@ -695,7 +819,9 @@ fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
   if (cs->period < MIN_NOTE_PERIOD)
     cs->period = MIN_NOTE_PERIOD;
 
+ do_update_period:
   DEBUG_FX("period: %u\n", cs->period);
+  update_chan_period(cs);
 }
 
 
@@ -807,9 +933,9 @@ fx_ontick(mod_context_t* mc, chan_state_t* cs)
 /* on per channel state */
 
 static inline void
-chan_init_state(chan_state_t* cs, unsigned int ichan, unsigned int ipat)
+chan_init_state(chan_state_t* cs, unsigned int ichan)
 {
-  memset(cs, 0, sizeof(struct chan_state));
+  memset(cs, 0, sizeof(chan_state_t));
 
   cs->ichan = ichan;
   cs->freq = 48000;
@@ -829,10 +955,12 @@ int mod_init(mod_context_t* mc, const void* data, size_t length)
   if (load_file(mc, data, length) == -1)
     return -1;
 
-  chan_init_state(&mc->cstates[0], 0, mc->ipat);
-  chan_init_state(&mc->cstates[1], 1, mc->ipat);
-  chan_init_state(&mc->cstates[2], 2, mc->ipat);
-  chan_init_state(&mc->cstates[3], 3, mc->ipat);
+  init_pitch_table();
+
+  chan_init_state(&mc->cstates[0], 0);
+  chan_init_state(&mc->cstates[1], 1);
+  chan_init_state(&mc->cstates[2], 2);
+  chan_init_state(&mc->cstates[3], 3);
 
   mod_reset(mc);
 
@@ -862,15 +990,12 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,struct 
   cs->position+=(cs->fraction>>16);
   cs->fraction&=0xffff;
 
-  
-  
   // check for end
   if(roff>2 || rlength>2)
     {
-      
       if(cs->position >= roff+rlength)
 	{
-	  //printf("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
+	  DEBUG_PRINTF("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
 	  cs->position=roff;
 	}
     }
@@ -953,9 +1078,10 @@ static void mod_produce(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
 
 static const void* mod_get_playhead(mod_context_t* mc)
 {
-  uint32_t ipat=mc->song[mc->songpos];
+  const uint32_t ipat = mc->song[mc->songpos];
   const void *patternpos=mc->pdata+ipat*mc->patternsize;
   const void *playhead=patternpos+mc->idiv*mc->divisionsize;
+
   //DEBUG_PRINTF("%08x ",playhead-(void*)mc->sdescs+20);
   return playhead;
 }
@@ -969,21 +1095,21 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
 
   cs->periodstep = 0;
 
-  if(period)
+  cs->finetune = get_sample_finetune(mc, sample - 1);
+
+  if (period)
     {
-      cs->period=period;
-      // number of samples to step per second in source sample
-      cs->smprate = PAL_SYNC_RATE / (period * 2);
-      cs->samplestep = (cs->smprate<<16)/48000;
-      //DEBUG_PRINTF("%08x %08x\n",cs->smprate,cs->samplestep);
-      //printf("%08d %08d %08d %08d\n",cs->smprate,cs->samplestep,(cs->smprate*48000)>>16,(cs->samplestep*48000)>>16);
+      cs->period = period;
+      update_chan_period(cs);
     }
-  if(sample)
+
+  if (sample)
     {
       cs->sample=sample;
       cs->volume=mc->sdescs[sample-1].volume;
       cs->volstep = 0;
     }
+
   cs->command=fx;
 
   if(sample || period)
@@ -1049,6 +1175,7 @@ static void __attribute__((unused)) chan_tick(chan_state_t* cs)
 static void mod_tick(mod_context_t* mc)
 {
   mc->tick++;
+
   if(mc->tick>=mc->ticksperdivision)
     {
       mc->tick=0;
