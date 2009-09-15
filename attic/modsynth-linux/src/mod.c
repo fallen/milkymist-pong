@@ -652,6 +652,8 @@ fx_ondiv_vibrato(mod_context_t* mc, chan_state_t* cs)
 
   if (cs->vibretrig)
     cs->viboffset = 0;
+
+  DEBUG_FX("vibrato: %d\n", param);
 }
 
 
@@ -707,6 +709,7 @@ fx_ontick_vibrato_volume_slide(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_tremolo(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("tremolo: %x\n", cs->command);
 }
 
 static void
@@ -866,6 +869,8 @@ fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
 {
   const unsigned int param = fx_get_second_param(cs->command);
 
+  DEBUG_FX("vibrato waveform: %x\n", param);
+
   cs->vibtable = vibrato_table[param & 0x3];
   cs->vibretrig=!(param&4);
 }
@@ -875,6 +880,7 @@ fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_set_finetune_value(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("set finetune value: %x\n", cs->command);
 }
 
 /* loop pattern */
@@ -882,6 +888,7 @@ fx_ondiv_set_finetune_value(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_loop_pattern(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("loop pattern: %x\n", cs->command);
 }
 
 /* set tremolo waveform */
@@ -889,6 +896,7 @@ fx_ondiv_loop_pattern(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_set_tremolo_waveform(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("set tremolo waveform: %x\n", cs->command);
 }
 
 /* retriggersample */
@@ -896,6 +904,7 @@ fx_ondiv_set_tremolo_waveform(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_retrigger_sample(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("retrigger sample: %x\n", cs->command);
 }
 
 static void
@@ -911,6 +920,7 @@ fx_ontick_retrigger_sample(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_fine_volume_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("fine volume slide up: %x\n", cs->command);
   cs->volume+=fx_get_second_param(cs->command);
   cs->volume=LIMIT(0,cs->volume,64);
 }
@@ -920,6 +930,7 @@ fx_ondiv_fine_volume_slide_up(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_fine_volume_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("fine volume slide down: %x\n", cs->command);
   cs->volume-=fx_get_second_param(cs->command);
   cs->volume=LIMIT(0,cs->volume,64);
 }
@@ -929,6 +940,7 @@ fx_ondiv_fine_volume_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_cut_sample(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("cut sample: %x\n", cs->command);
 }
 
 /* delay sample */
@@ -936,6 +948,7 @@ fx_ondiv_cut_sample(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_delay_sample(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("delay sample: %x\n", cs->command);
 }
 
 /* delay pattern */
@@ -943,6 +956,7 @@ fx_ondiv_delay_sample(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_delay_pattern(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("delay pattern: %x\n", cs->command);
 }
 
 /* invert loop */
@@ -950,6 +964,7 @@ fx_ondiv_delay_pattern(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_invert_loop(mod_context_t* mc, chan_state_t* cs)
 {
+  DEBUG_FX("invert loop: %x\n", cs->command);
 }
 
 
@@ -1127,7 +1142,7 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
     {
       if(cs->position >= roff+rlength)
 	{
-	  DEBUG_PRINTF("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
+	  //DEBUG_PRINTF("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
 	  cs->position=roff;
 	}
     }
