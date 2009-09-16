@@ -16,11 +16,13 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
  */
 
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "mod.h"
 #include "debug.h"
 
@@ -168,10 +170,10 @@ static inline unsigned int get_sample_volume(const mod_context_t* mc,
 }
 
 
-static inline unsigned int get_sample_finetune(const mod_context_t* mc,
+static inline int8_t get_sample_finetune(const mod_context_t* mc,
 					       unsigned int ismp)
 {
-  return get_sample_desc(mc, ismp)->finetune & 0x0f;
+  return (((int8_t)get_sample_desc(mc, ismp)->finetune)<<4)>>4;
 }
 
 
@@ -321,6 +323,7 @@ static int load_file(mod_context_t* mc, const void* data, size_t length)
 	     (uint32_t)get_sample_repeat_offset(mc, ismp),
 	     (uint32_t)get_sample_repeat_length(mc, ismp));
 #endif
+      DEBUG_PRINTF("sample %2x finetune %x\n",ismp+1,get_sample_finetune(mc,ismp));
       size += get_sample_length(mc, ismp);
     }
 #if 0
@@ -350,9 +353,9 @@ static unsigned int find_note_by_pitch(unsigned int);
 
 static void inline update_chan_period(chan_state_t* cs)
 {
-  cs->smprate = PAL_SYNC_RATE / (cs->period * 2);
+  cs->smprate = PAL_SYNC_RATE / (((cs->currentperiod*cs->modperiod)>>16) * 2);
   cs->samplestep = (cs->smprate << 16) / 48000;
-  cs->note = find_note_by_pitch(cs->period);
+  cs->note = find_note_by_pitch(cs->currentperiod);
 }
 
 
@@ -417,19 +420,19 @@ static unsigned int find_note_by_pitch(unsigned int pitch)
     {
       i = (a + b) / 2;
 
-      if (pitch_table[i][0] == pitch)
+      if (pitch_table[i][8] == pitch)
 	return i;
 
-      if (pitch_table[i][0] > pitch)
+      if (pitch_table[i][8] > pitch)
 	a = i;
       else
 	b = i;
     }
 
-  if (pitch_table[a][0] - FUZZ <= pitch)
+  if (pitch_table[a][8] - FUZZ <= pitch)
     return a;
 
-  if (pitch_table[b][0] + FUZZ >= pitch)
+  if (pitch_table[b][8] + FUZZ >= pitch)
     return b;
 
   return MAX_NOTE;
@@ -454,7 +457,7 @@ fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
     {
       /* no previous note */
 
-      cs->arpnotes[0] = cs->period;
+      cs->arpnotes[0] = cs->currentperiod;
       cs->arpnotes[1] = cs->arpnotes[0];
       cs->arpnotes[2] = cs->arpnotes[0];
 
@@ -485,11 +488,11 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
   if (cs->arpindex == 3)
     cs->arpindex = 0;
 
-  DEBUG_FX("[%u] arpindex: %u\n", cs->ichan, cs->arpindex);
 
-  cs->period = cs->arpnotes[cs->arpindex++];
+  cs->currentperiod = cs->arpnotes[cs->arpindex++];
 
   update_chan_period(cs);
+  DEBUG_FX("[%u] arpindex: %u %08x %04x\n", cs->ichan, cs->arpindex,cs->modperiod,cs->currentperiod);
 }
 
 
@@ -498,7 +501,8 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
-  cs->periodstep = (int)fx_get_byte_param(cs->command);
+  int periodstep = (int)fx_get_byte_param(cs->command);
+  cs->periodstep=periodstep?periodstep:cs->periodstep;
 
   DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
@@ -508,23 +512,10 @@ static void
 fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 {
 #define MIN_NOTE_PERIOD 113 /* B3 note freq */
-
-  /* int underflow */
-  if (cs->period - cs->periodstep > cs->period)
-    {
-      cs->period = MIN_NOTE_PERIOD;
-      goto do_update_period;
-    }
-
-  if (cs->period - (unsigned int)cs->periodstep < MIN_NOTE_PERIOD)
-    {
-      cs->period = MIN_NOTE_PERIOD;
-      goto do_update_period;
-    }
-
-  cs->period -= (unsigned int)cs->periodstep;
-
- do_update_period:
+#define MAX_NOTE_PERIOD 856 /* C1 note freq */
+  
+  cs->currentperiod-=cs->periodstep;
+  cs->currentperiod=LIMIT(MIN_NOTE_PERIOD,cs->currentperiod,MAX_NOTE_PERIOD);
   update_chan_period(cs);
 }
 
@@ -534,7 +525,8 @@ fx_ontick_slide_up(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
-  cs->periodstep = (unsigned int)fx_get_byte_param(cs->command);
+  int periodstep = (int)fx_get_byte_param(cs->command);
+  cs->periodstep=periodstep?periodstep:cs->periodstep;
 
   DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
@@ -543,24 +535,8 @@ fx_ondiv_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 {
-#define MAX_NOTE_PERIOD 856 /* C1 note freq */
-
-  /* int overflow */
-  if (cs->period + (unsigned int)cs->periodstep < cs->period)
-    {
-      cs->period = MAX_NOTE_PERIOD;
-      goto do_update_period;
-    }
-
-  if (cs->period + (unsigned int)cs->periodstep > MAX_NOTE_PERIOD)
-    {
-      cs->period = MAX_NOTE_PERIOD;
-      goto do_update_period;
-    }
-
-  cs->period += (unsigned int)cs->periodstep;
-
- do_update_period:
+  cs->currentperiod+=cs->periodstep;
+  cs->currentperiod=LIMIT(MIN_NOTE_PERIOD,cs->currentperiod,MAX_NOTE_PERIOD);
   update_chan_period(cs);
 }
 
@@ -570,10 +546,8 @@ fx_ontick_slide_down(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_portamento(mod_context_t* mc, chan_state_t* cs)
 {
-  cs->periodstep = (int)fx_get_byte_param(cs->command);
-
-  if (cs->periodstep == 0)
-    return ;
+  int periodstep = (int)fx_get_byte_param(cs->command);
+  cs->periodstep=periodstep?periodstep:cs->periodstep;
 
   DEBUG_FX("periodstep: %d\n", cs->periodstep);
 }
@@ -582,30 +556,21 @@ fx_ondiv_portamento(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ontick_portamento(mod_context_t* mc, chan_state_t* cs)
 {
-  int period;
+  int pmax=MAX_NOTE_PERIOD,pmin=MIN_NOTE_PERIOD;
+  int period=cs->currentperiod;
 
-  if (cs->periodstep == 0)
-    return ;
-
-  period = (int)cs->period + cs->periodstep;
-
-  if (cs->periodstep > 0)
+  if(cs->currentperiod>cs->periodtarget)
     {
-      if ((unsigned int)period < cs->periodtarget)
-	goto fallthru_case;
+      period-=cs->periodstep;
+      pmin=cs->periodtarget;
     }
   else
     {
-      if ((unsigned int)period > cs->periodtarget)
-	goto fallthru_case;
+      period+=cs->periodstep;
+      pmax=cs->periodtarget;
     }
 
-  /* periodtarget reached */
-  cs->periodstep = 0;
-  period = cs->periodtarget;
-
- fallthru_case:
-  cs->period = period;
+  cs->currentperiod=LIMIT(pmin,period,pmax);
   update_chan_period(cs);
 }
 
@@ -615,25 +580,33 @@ fx_ontick_portamento(mod_context_t* mc, chan_state_t* cs)
 static int vibrato_table[3][64] = 
   {
     {
-      0,50,100,149,196,241,284,325,362,396,426,452,473,490,502,510,512,
-      510,502,490,473,452,426,396,362,325,284,241,196,149,100,50,0,-49,
-      -99,-148,-195,-240,-283,-324,-361,-395,-425,-451,-472,-489,-501,
-      -509,-511,-509,-501,-489,-472,-451,-425,-395,-361,-324,-283,-240,
-      -195,-148,-99,-49
+        0,  50, 100, 149,  196, 241, 284, 325,  362, 396, 426, 452,  473, 490,  502, 510,
+      512, 510, 502, 490,  473, 452, 426, 396,  362, 325, 284, 241,  196, 149,  100,  50,     
+	0, -49, -99,-148, -195,-240,-283,-324, -361,-395,-425,-451, -472,-489, -501,-509,
+     -511,-509,-501,-489, -472,-451,-425,-395, -361,-324,-283,-240, -195,-148,  -99, -49,
     },
+#if 1
     {
-      512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,
-      512,512,512,512,512,512,512,512,512,512,512,512,512,512,512,-512,-512,
-      -512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512, 
-      -512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,-512,
-      -512,-512
+      496, 480, 464, 448,  432, 416, 400, 384,  368, 352, 336, 320,  304, 288, 222, 256,
+      240, 224, 208, 192,  176, 160, 144, 128,  112,  96,  48,  16,    0, -16, -32, -48,
+      -64, -80, -96,-112, -128,-144,-160,-176, -192,-208,-224,-240, -256,-272,-288,-304,
+     -320,-336,-352,-368, -384,-400,-416,-432, -448,-464,-480,-496, -512,-512,-512,-512,
+
     },
+#else
     {
-      0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256,272,288,
-      304,320,336,352,368,384,400,416,432,448,464,480,496,-512,-496,-480,
-      -464,-448,-432,-416,-400,-384,-368,-352,-336,-320,-304,-288,-272,-256,
-      -240,-224,-208,-192,-176,-160,-144,-128,-112,-96,-80,-64,-48,-32,-16
-    }
+         0,  16,  32,  48,   64,  80,  96, 112,  128, 144, 160, 176,  192, 208, 224, 240,
+       256, 272, 288, 304,  320, 336, 352, 368,  384, 400, 416, 432,  448, 464, 480,496,
+      -512,-496,-480,-464, -448,-432,-416,-400, -384,-368,-352,-336, -320,-304,-288,-272,
+      -256,-240,-224,-208, -192,-176,-160,-144, -128,-112, -96, -80,  -64, -48, -32, -16,
+    },
+#endif
+    {
+       512, 512, 512, 512,  512, 512, 512, 512,  512, 512, 512, 512,  512, 512, 512, 512,
+       512, 512, 512, 512,  512, 512, 512, 512,  512, 512, 512, 512,  512, 512, 512, 512,
+      -512,-512,-512,-512, -512,-512,-512,-512, -512,-512,-512,-512, -512,-512,-512,-512, 
+      -512,-512,-512,-512, -512,-512,-512,-512, -512,-512,-512,-512, -512,-512,-512,-512,
+    },
   };
 
 
@@ -660,8 +633,20 @@ fx_ondiv_vibrato(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
 {
+  int p;
+  float mod1,mod2,mod;
+
+  // should be (x*ticks)/64 cycles in one division
+  // 64*
+
   cs->viboffset = (cs->viboffset + cs->vibrate) & (0x40 - 1);
-  cs->period += (cs->vibtable[cs->viboffset] * cs->vibdepth) / 256;
+  p=(cs->vibtable[cs->viboffset] * cs->vibdepth); // +-512 * +-16
+  mod1 = powf(2.0, (1.0f) / 12.0);
+  mod2 = 1.0/mod1;
+  mod=mod1+(mod2-mod1)*(0.5+p/(2*15*512.0f));
+
+  cs->modperiod=(unsigned int)(mod*0x10000);
+  DEBUG_FX("vibrato: mod %d %d %d %f %08x\n", p, cs->vibrate,cs->vibdepth,p/(2*512.0f),cs->modperiod);
   update_chan_period(cs);
 }
 
@@ -833,10 +818,10 @@ static void
 fx_ondiv_fineslide_up(mod_context_t* mc, chan_state_t* cs)
 {
   /* no actual sliding */
-  cs->period+=fx_get_second_param(cs->command);
-  cs->period=MIN(cs->period,MAX_NOTE_PERIOD);
+  cs->currentperiod+=fx_get_second_param(cs->command);
+  cs->currentperiod=MIN(cs->currentperiod,MAX_NOTE_PERIOD);
 
-  DEBUG_FX("period: %u\n", cs->period);
+  DEBUG_FX("period: %u\n", cs->currentperiod);
   update_chan_period(cs);
 }
 
@@ -847,10 +832,10 @@ static void
 fx_ondiv_fineslide_down(mod_context_t* mc, chan_state_t* cs)
 {
   /* no actual sliding */
-  cs->period-=fx_get_second_param(cs->command);
-  cs->period=MAX(cs->period,MIN_NOTE_PERIOD);
+  cs->currentperiod-=fx_get_second_param(cs->command);
+  cs->currentperiod=MAX(cs->currentperiod,MIN_NOTE_PERIOD);
 
-  DEBUG_FX("period: %u\n", cs->period);
+  DEBUG_FX("period: %u\n", cs->currentperiod);
   update_chan_period(cs);
 }
 
@@ -880,6 +865,14 @@ fx_ondiv_set_vibrato_waveform(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_set_finetune_value(mod_context_t* mc, chan_state_t* cs)
 {
+/*
+  Finetuning are done by multiplying the frequency of the playback by 
+  X^(finetune), where X ~= 1.0072382087
+  This means that Amiga PERIODS, which represent delay times before 
+  fetching the next sample, should be multiplied by X^(-finetune)
+*/
+
+
   DEBUG_FX("set finetune value: %x\n", cs->command);
 }
 
@@ -912,7 +905,7 @@ fx_ontick_retrigger_sample(mod_context_t* mc, chan_state_t* cs)
 {
   int div=fx_get_second_param(cs->command);
   if(div && (mc->tick%div) == 0)
-    cs->position=0;
+    cs->position=2;
 }
 
 /* fine volume slide up */
@@ -1143,7 +1136,7 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
       if(cs->position >= roff+rlength)
 	{
 	  //DEBUG_PRINTF("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
-	  cs->position=roff;
+	  cs->position=roff+(cs->position-roff)%rlength;
 	}
     }
   else
@@ -1162,15 +1155,49 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
     {
       printf("%d %2x %p %4d %08x.%04x %08x %08x\n",cs->ichan,cs->sample,mc->sdata[cs->sample-1],mc->sdata[cs->sample-1][cs->position],cs->position,cs->fraction,cs->smprate,cs->samplestep);
     }
-  
-  
-  return mc->sdata[cs->sample-1][cs->position]*cs->volume;
+
+#if 0
+  // Floor
+  return mc->sdata[cs->sample-1][cs->position+0]*cs->volume;
+#endif
+#if 1
+  {
+    // Linear interpolation
+    int s0,s1;
+    s0=mc->sdata[cs->sample-1][cs->position+0];
+    s1=mc->sdata[cs->sample-1][cs->position+1];
+    return ((s1*cs->fraction+s0*(0x10000-cs->fraction))*cs->volume)>>16;
+  }
+#endif
+#if 0
+  {
+    // Cubic interpolation
+    int64_t s0,s1,s2,s3;
+    s0=mc->sdata[cs->sample-1][cs->position+0]<<16;
+    s1=mc->sdata[cs->sample-1][cs->position+1]<<16;
+    s2=mc->sdata[cs->sample-1][cs->position+2]<<16;
+    s3=mc->sdata[cs->sample-1][cs->position+3]<<16;
+    int64_t f2=(cs->fraction*cs->fraction)>>16;       // .16
+    int64_t f1=cs->fraction;                          // .16
+    int64_t frcu=(f2*s0)>>16;                         // .16
+    int64_t t1=s3+3*s1;                               // .16                
+    
+    return ((
+      s1+                                        // 16.16
+      (frcu/2)+                                  // 16.16
+      ( (f1*(s2-frcu/6-t1/6-s0/3))     >>16)+       
+      ((f2*f1*(t1/6-s2/2))             >>32)+
+      ((f2*(s2/2-s1))                  >>16) )
+	      * cs->volume) >>16; 
+    return ((s1*cs->fraction+s0*(0x10000-cs->fraction))*cs->volume)>>16;
+  }
+#endif
 }
 
 
 static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
 {
-  int32_t l,r;
+  int32_t l,r,x;
   int32_t j;
   chan_state_t* cs;
   for(j=0;j<nsmps;j++)
@@ -1237,21 +1264,24 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
   uint32_t sample= (playhead[0] & 0xf0) | (playhead[2]>>4);
   uint32_t period= ((playhead[0] & 0x0f) << 8) | playhead[1];
   uint32_t fx    = ((playhead[2] & 0x0f) << 8) | playhead[3]; 
-  //DEBUG_PRINTF("[S%02x P%3x F%3x]\n",sample,period,fx);
+  //printf("[S%02x P%3x F%3x]",sample,period,fx);
 
-  cs->periodstep = 0;
-
-  cs->finetune = get_sample_finetune(mc, sample - 1);
+  cs->modperiod=0x10000;
 
   if (period)
     {
-      if((fx&0xf00)==0x300)
-	// portamento so we set target instead
-	cs->periodtarget = period;
+      int cmd=fx>>8;
+      if(cmd==3 || cmd==5)
+	{
+	  // portamento so we set target instead
+	  cs->periodtarget = period;
+	  DEBUG_PRINTF("portamento from %04x to %04x\n",cs->currentperiod,period);
+	}
       else
 	{	
 	  cs->periodtarget=0;
 	  cs->period = period;
+	  cs->currentperiod = period;
 	}	  
       update_chan_period(cs);
     }
@@ -1261,6 +1291,7 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
       cs->sample=sample;
       cs->volume=mc->sdescs[sample-1].volume;
       cs->volstep = 0;
+      cs->finetune = get_sample_finetune(mc, sample - 1)+8;
     }
 
   cs->command=fx;
@@ -1268,7 +1299,8 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
   if(sample || period)
     {
       // note on ie restart sample if sample or period is set
-      cs->position=cs->fraction=0;
+      cs->position=2;
+      cs->fraction=0;
     }
 
   // per division command processing

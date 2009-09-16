@@ -55,7 +55,7 @@ int main(int ac, char** av)
     FILE *f=fopen("output.raw","wb");
     unsigned int i;
 
-    for (i = 0; i < 230; ++i)
+    for (i = 0; i < 100; ++i)
       {
 	mod_fetch(&mc, pcm_get_buf_data(pcm_buf), pcm_get_buf_count(pcm_buf));
 #if 0	
