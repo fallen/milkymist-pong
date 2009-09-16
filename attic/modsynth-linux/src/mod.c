@@ -173,7 +173,7 @@ static inline unsigned int get_sample_volume(const mod_context_t* mc,
 static inline int8_t get_sample_finetune(const mod_context_t* mc,
 					       unsigned int ismp)
 {
-  return (((int8_t)get_sample_desc(mc, ismp)->finetune)<<4)>>4;
+  return (((int8_t)get_sample_desc(mc, ismp)->finetune)&0xf); //<<4)>>4;
 }
 
 
@@ -420,19 +420,19 @@ static unsigned int find_note_by_pitch(unsigned int pitch)
     {
       i = (a + b) / 2;
 
-      if (pitch_table[i][8] == pitch)
+      if (pitch_table[i][0] == pitch)
 	return i;
 
-      if (pitch_table[i][8] > pitch)
+      if (pitch_table[i][0] > pitch)
 	a = i;
       else
 	b = i;
     }
 
-  if (pitch_table[a][8] - FUZZ <= pitch)
+  if (pitch_table[a][0] - FUZZ <= pitch)
     return a;
 
-  if (pitch_table[b][8] + FUZZ >= pitch)
+  if (pitch_table[b][0] + FUZZ >= pitch)
     return b;
 
   return MAX_NOTE;
@@ -1291,7 +1291,7 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
       cs->sample=sample;
       cs->volume=mc->sdescs[sample-1].volume;
       cs->volstep = 0;
-      cs->finetune = get_sample_finetune(mc, sample - 1)+8;
+      cs->finetune = get_sample_finetune(mc, sample - 1);
     }
 
   cs->command=fx;
