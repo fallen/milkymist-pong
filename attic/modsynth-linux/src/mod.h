@@ -95,6 +95,12 @@ struct chan_state
   uint32_t position;     // sample offset (the 32.0 of 32.16)
   uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)
   uint32_t samplestep;   // 16.16 to add to position.fraction for each step of sample
+
+  int32_t rampvolume;
+  int32_t lastvolume;
+
+  int32_t backbuffer[4];
+  
 };
 
 typedef struct chan_state chan_state_t;

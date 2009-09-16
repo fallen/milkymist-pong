@@ -801,10 +801,13 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
     }
   else
     {
+      // [fx] fx_ondiv_set_speed_810: tickspersecond: 25, samplespertick: 1920
+
       // set beats per minute, at 6 ticks per division and 4 divisions is one beat
       // samples per tick is really what we want to set here
       // number of ticks per beat is 4*mc->ticksperdivision
-      mc->tickspersecond = speed * 4 * mc->ticksperdivision / 60;
+      //mc->tickspersecond = speed * 4 * mc->ticksperdivision / 60;
+      mc->tickspersecond = speed * 4 * 6 / 60;
       mc->samplespertick = 48000 / mc->tickspersecond;
 
       DEBUG_FX("tickspersecond: %u, samplespertick: %u\n", mc->tickspersecond, mc->samplespertick);
@@ -1125,6 +1128,14 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
 {
   uint16_t roff=mc->s_roff[cs->sample-1];
   uint16_t rlength=mc->s_rlength[cs->sample-1];
+  int32_t volume;
+
+  if(!cs->samplestep) return 0;
+
+  cs->backbuffer[3]=cs->backbuffer[2];
+  cs->backbuffer[2]=cs->backbuffer[1];
+  cs->backbuffer[1]=cs->backbuffer[0];
+
   // advance sample pointer
   cs->fraction+=cs->samplestep;
   cs->position+=(cs->fraction>>16);
@@ -1137,6 +1148,8 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
 	{
 	  //DEBUG_PRINTF("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
 	  cs->position=roff+(cs->position-roff)%rlength;
+	  cs->fraction=0;
+	  
 	}
     }
   else
@@ -1145,38 +1158,41 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
       if(cs->position >= length)
 	{
 	  // should really disable instead - current steps outside of sample before stopping!!!
-	  //printf("end at %08x.%04x\n",cs->position,cs->fraction);
 	  cs->smprate=0;
 	  cs->samplestep=0;
 	}
     }
 
-  if(0 && cs->samplestep)
-    {
-      printf("%d %2x %p %4d %08x.%04x %08x %08x\n",cs->ichan,cs->sample,mc->sdata[cs->sample-1],mc->sdata[cs->sample-1][cs->position],cs->position,cs->fraction,cs->smprate,cs->samplestep);
-    }
+  int sample=0;
+  if(cs->samplestep)
+    sample=mc->sdata[cs->sample-1][cs->position+0];
+  cs->backbuffer[0]=sample;
+
+  volume=(cs->lastvolume*cs->rampvolume+cs->volume*(64-cs->rampvolume))>>0;
+  if(cs->rampvolume) cs->rampvolume--;
+
 
 #if 0
   // Floor
-  return mc->sdata[cs->sample-1][cs->position+0]*cs->volume;
+  return (cs->backbuffer[0]*volume)>>6;
 #endif
 #if 1
   {
     // Linear interpolation
     int s0,s1;
-    s0=mc->sdata[cs->sample-1][cs->position+0];
-    s1=mc->sdata[cs->sample-1][cs->position+1];
-    return ((s1*cs->fraction+s0*(0x10000-cs->fraction))*cs->volume)>>16;
+    s0=cs->backbuffer[0];
+    s1=cs->backbuffer[1];
+    return (((s1*(int)cs->fraction+s0*(0x10000-(int)cs->fraction))>>6)*volume)>>(16);
   }
 #endif
 #if 0
   {
     // Cubic interpolation
     int64_t s0,s1,s2,s3;
-    s0=mc->sdata[cs->sample-1][cs->position+0]<<16;
-    s1=mc->sdata[cs->sample-1][cs->position+1]<<16;
-    s2=mc->sdata[cs->sample-1][cs->position+2]<<16;
-    s3=mc->sdata[cs->sample-1][cs->position+3]<<16;
+    s0=cs->backbuffer[3]<<16;
+    s1=cs->backbuffer[2]<<16;
+    s2=cs->backbuffer[1]<<16;
+    s3=cs->backbuffer[0]<<16;
     int64_t f2=(cs->fraction*cs->fraction)>>16;       // .16
     int64_t f1=cs->fraction;                          // .16
     int64_t frcu=(f2*s0)>>16;                         // .16
@@ -1188,8 +1204,7 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
       ( (f1*(s2-frcu/6-t1/6-s0/3))     >>16)+       
       ((f2*f1*(t1/6-s2/2))             >>32)+
       ((f2*(s2/2-s1))                  >>16) )
-	      * cs->volume) >>16; 
-    return ((s1*cs->fraction+s0*(0x10000-cs->fraction))*cs->volume)>>16;
+	    * volume) >>(16+6); 
   }
 #endif
 }
@@ -1213,8 +1228,8 @@ static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
       l+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
       //l*=2;
       //r*=2;
-      (*obuf++)=l+r;
-      (*obuf++)=r+l;
+      (*obuf++)=(l+r/2);
+      (*obuf++)=(r+l/2);
     }
 }
 
@@ -1268,7 +1283,7 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
 
   cs->modperiod=0x10000;
 
-  if (period)
+  if(period)
     {
       int cmd=fx>>8;
       if(cmd==3 || cmd==5)
@@ -1312,6 +1327,8 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
 static void chan_process_tick(chan_state_t* cs, mod_context_t* mc)
 {
   // per tick command processing
+  cs->lastvolume=cs->volume;
+  cs->rampvolume=64;
   fx_ontick(mc, cs);
 }
 
@@ -1319,6 +1336,7 @@ static void mod_process_channels(mod_context_t* mc)
 {
   uint8_t* playhead=(uint8_t*)mod_get_playhead(mc);
   uint32_t i=0;
+  DEBUG_PRINTF("ticksperdiv %d samplespertick %d\n",mc->ticksperdivision,mc->samplespertick);
   //printf("s%3d p%3d d%3d t%2d ",mc->songpos,mc->song[mc->songpos],mc->idiv,mc->tick);
   for(i=0;i<mc->channels;i++,playhead+=4)
     {
