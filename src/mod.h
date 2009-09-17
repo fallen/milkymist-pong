@@ -57,9 +57,6 @@ struct chan_state
   /* offset in the sample in bytes */
   unsigned int smpoff;
 
-  /* sample rate */
-  unsigned int smprate;
-
   /* chan flags */
 #define CHAN_FLAG_IS_SAMPLE_STARTING (1 << 0)
 #define CHAN_FLAG_IS_SAMPLE_REPEATING (1 << 1)

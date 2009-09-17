@@ -353,8 +353,16 @@ static unsigned int find_note_by_pitch(unsigned int);
 
 static void inline update_chan_period(chan_state_t* cs)
 {
-  cs->smprate = PAL_SYNC_RATE / (((cs->currentperiod*cs->modperiod)>>16) * 2);
-  cs->samplestep = (cs->smprate << 16) / 48000;
+  unsigned int smprate;
+  unsigned int div;
+
+  div = ((cs->currentperiod*cs->modperiod)>>16) * 2;
+  if(div == 0)
+    cs->samplestep = 1;
+  else {
+    smprate = PAL_SYNC_RATE / div;
+    cs->samplestep = (smprate << 16) / 48000;
+  }
   cs->note = find_note_by_pitch(cs->currentperiod);
 }
 
@@ -488,9 +496,7 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
   if (cs->arpindex == 3)
     cs->arpindex = 0;
 
-
   cs->currentperiod = cs->arpnotes[cs->arpindex++];
-
   update_chan_period(cs);
   DEBUG_FX("[%u] arpindex: %u %08x %04x\n", cs->ichan, cs->arpindex,cs->modperiod,cs->currentperiod);
 }
@@ -996,7 +1002,7 @@ static const struct fx_info fx_table[] =
 
     /* base effects */
 
-    EXPAND_FX_INFO_ENTRY(/*arpeggio*/unknown),
+    EXPAND_FX_INFO_ENTRY(arpeggio),
     EXPAND_FX_INFO_ENTRY(slide_up),
     EXPAND_FX_INFO_ENTRY(slide_down),
     EXPAND_FX_INFO_ENTRY(portamento),
@@ -1157,8 +1163,7 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
       uint16_t length=mc->s_length[cs->sample-1];
       if(cs->position >= length)
 	{
-	  // should really disable instead - current steps outside of sample before stopping!!!
-	  cs->smprate=0;
+// 	  // should really disable instead - current steps outside of sample before stopping!!!
 	  cs->samplestep=0;
 	}
     }
