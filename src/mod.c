@@ -646,7 +646,7 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
   mod=mod1+(mod2-mod1)*(0.5+p/(2*15*512.0f));
 
   cs->modperiod=(unsigned int)(mod*0x10000);
-  DEBUG_FX("vibrato: mod %d %d %d %f %08x\n", p, cs->vibrate,cs->vibdepth,p/(2*512.0f),cs->modperiod);
+  //DEBUG_FX("vibrato: mod %d %d %d %f %08x\n", p, cs->vibrate,cs->vibdepth,p/(2*512.0f),cs->modperiod);
   update_chan_period(cs);
 }
 
@@ -1329,7 +1329,7 @@ static void chan_process_tick(chan_state_t* cs, mod_context_t* mc)
   // per tick command processing
   cs->lastvolume=cs->volume;
   cs->rampvolume=64;
-  fx_ontick(mc, cs);
+  //fx_ontick(mc, cs);
 }
 
 static void mod_process_channels(mod_context_t* mc)

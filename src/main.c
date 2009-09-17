@@ -35,6 +35,7 @@
 #include "tmu.h"
 #include "pfpu.h"
 #include "intro.h"
+#include "music.h"
 
 static void banner()
 {
@@ -50,6 +51,7 @@ int main()
 	irq_setmask(0);
 	irq_enable(1);
 	uart_async_init();
+	uart_force_sync(1);
 	banner();
 	brd_init();
 	time_init();
@@ -59,6 +61,7 @@ int main()
 	tmu_init();
 	pfpu_init();
 
+	music_start();
 	while(1) {
 		intro_csv();
 		while(!(CSR_GPIO_IN & GPIO_DIP3));
