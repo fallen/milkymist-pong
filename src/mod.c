@@ -996,7 +996,7 @@ static const struct fx_info fx_table[] =
 
     /* base effects */
 
-    EXPAND_FX_INFO_ENTRY(arpeggio),
+    EXPAND_FX_INFO_ENTRY(/*arpeggio*/unknown),
     EXPAND_FX_INFO_ENTRY(slide_up),
     EXPAND_FX_INFO_ENTRY(slide_down),
     EXPAND_FX_INFO_ENTRY(portamento),
@@ -1329,7 +1329,7 @@ static void chan_process_tick(chan_state_t* cs, mod_context_t* mc)
   // per tick command processing
   cs->lastvolume=cs->volume;
   cs->rampvolume=64;
-  //fx_ontick(mc, cs);
+  fx_ontick(mc, cs);
 }
 
 static void mod_process_channels(mod_context_t* mc)
