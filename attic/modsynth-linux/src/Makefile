@@ -8,7 +8,7 @@ HEADERS=$(addsuffix .h, $(filter-out $(TARGET),$(NAMES)))
 
 CC=gcc
 
-CFLAGS=-Wall -DUSE_MMAP -DLITTLE_ENDIAN -D_DEBUG=1 -ggdb
+CFLAGS=-Wall -DUSE_MMAP -DLITTLE_ENDIAN -D_DEBUG=0 -ggdb
 LDFLAGS=
 
 DEPFILE=depends.source
@@ -36,7 +36,7 @@ run:
 	ffplay out.wav
 
 play:
-	./main ../data/9.mod
+	./main ../data/10.mod
 	sox -L -r 48000 -t raw -b 2 -s -2 -c 2 output.raw -t wav out.wav 
 	ffplay out.wav
 

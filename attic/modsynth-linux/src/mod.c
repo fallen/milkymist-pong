@@ -355,6 +355,8 @@ static void inline update_chan_period(chan_state_t* cs)
 {
   cs->smprate = PAL_SYNC_RATE / (((cs->currentperiod*cs->modperiod)>>16) * 2);
   cs->samplestep = (cs->smprate << 16) / 48000;
+  // oops 9.mod break here if we but cs->period(slides to notes)
+  // and 10.mod break if we have cs->currentperiod(ever increasing arpeggio)
   cs->note = find_note_by_pitch(cs->currentperiod);
 }
 
