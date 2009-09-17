@@ -2,7 +2,7 @@ MMDIR?=../../milkymist/milkymist-core
 SERIALPORT?=/dev/ttyUSB0
 include $(MMDIR)/software/include.mak
 
-OBJECTS=crt0.o isr.o brd.o time.o mem.o vga.o snd.o tmu.o pfpu.o line.o fontmb.o text.o intro.o main.o
+OBJECTS=crt0.o isr.o brd.o time.o mem.o vga.o snd.o tmu.o pfpu.o line.o fontmb.o text.o intro.o main.o mod.o
 SEGMENTS=-j .text -j .data -j .rodata
 
 all: boot.bin
