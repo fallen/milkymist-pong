@@ -126,9 +126,6 @@ static void play_start(short *buffer)
 
 void snd_isr_dmar()
 {
-	/* NB. the callback can give us buffers by calling snd_play_refill() */
-	play_callback(play_queue[play_consume], play_user);
-
 	play_consume = (play_consume + 1) & PLAY_BUFQ_MASK;
 	play_level--;
 
@@ -139,6 +136,8 @@ void snd_isr_dmar()
 		play_underrun = 1;
 		CSR_AC97_DCTL = AC97_SCTL_EN; /* Ack interrupt anyway */
 	}
+
+	play_callback(play_queue[play_consume], play_user);
 }
 
 void snd_play_empty()
