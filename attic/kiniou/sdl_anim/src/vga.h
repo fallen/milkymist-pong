@@ -6,16 +6,14 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 
-
 #endif
 
 extern int vga_hres;
 extern int vga_vres;
 
-extern SDL_Surface * vga_frontbuffer;
-extern SDL_Surface * vga_backbuffer;
-extern SDL_Surface * vga_lastbuffer;
-extern SDL_Surface * screen;
+extern unsigned short int *vga_frontbuffer;
+extern unsigned short int *vga_backbuffer;
+extern unsigned short int *vga_lastbuffer;
 
 void vga_init();
 void vga_disable();

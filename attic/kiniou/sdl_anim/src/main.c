@@ -1,27 +1,34 @@
 
 #ifdef __SDLSDK__ //We are debugging on a computer :)
 
-#include <stdio.h> 
-#include <SDL/SDL.h>
+#include "sdl_config.h"
+#else // We are debugging on MilkyMist
 
-#elif // We are debugging on MilkyMist
-
-#include <console.h>
+#include "mm_config.h"
 
 #endif
 
 
-#include "demo_1.h"
-#include "sprites.h"
-#include "transition.h"
-#include "vga.h"
-
-#include "badclouds.png.h"
 
 int main() {
 
-    //Initialization
+#ifndef __SDLSDK__
+    irq_setmask(0);
+    irq_enable(1);
+    uart_async_init();
+    banner();
+    brd_init();
+    time_init();
+    mem_init();
+#endif
     vga_init();
+#ifndef __SDLSDK__
+    snd_init();
+    tmu_init();
+    pfpu_init();
+#endif
+
+    //Initialization
     sprites_init();
 
     sprites_load(badclouds_raw,badclouds_raw_len,0xFFFF,138,100,4);
@@ -33,43 +40,21 @@ int main() {
 
     unsigned short int * vga_position;
 
-    SDL_Event event;
-
     while(quit == 0)
     {
+        quit = scan_keys();
+        x = 50;
 
-        while ( SDL_PollEvent(&event) )
+        for (y=0;y<sprite_data[0].size_vres;y++)
         {
-            switch( event.type ){
-                case SDL_KEYDOWN:
-                    printf( "Key press detected\n" );
-                    switch( event.key.keysym.sym ){
-                        case SDLK_ESCAPE:
-                            quit=1;
-                            break;
-                        default:
-                            break;
-                    }
-                    break;
-
-                default:
-                    break;
-            }
-                
-
+            vga_position = &(vga_frontbuffer[x + y * vga_hres]);
+            memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
         }
-    x = 50;
-
-    for (y=0;y<sprite_data[0].size_vres;y++)
-    {
-        vga_position = &((unsigned short int *)vga_frontbuffer->pixels)[x + y * vga_hres];
-        memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
-    }
-    vga_swap_buffers();
-    SDL_Delay(100);
+        vga_swap_buffers();
+        demo_sleep(100);
     }
 
-    SDL_Quit();
+    demo_quit();
     return 0;
 }
 

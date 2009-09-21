@@ -1,54 +1,82 @@
-#include "vga.h"
+/*
+ * Milkymist Democompo
+ * Copyright (C) 2007, 2008, 2009 Sebastien Bourdeauducq
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
-SDL_Surface * screen;
-SDL_Surface * vga_frontbuffer;
-SDL_Surface * vga_backbuffer;
-SDL_Surface * vga_lastbuffer;
+#include <console.h>
+#include <hw/vga.h>
 
+/*
+ * RGB565 framebuffers.
+ * We use page flipping triple buffering as described on
+ * http://en.wikipedia.org/wiki/Triple_buffering
+ *
+ * Buffers must be aligned to the start of an FML burst
+ * which is 4x64 bits, that is, 256 bits, or 32 bytes.
+ */
+static unsigned short int framebufferA[640*480] __attribute__((aligned(32)));
+static unsigned short int framebufferB[640*480] __attribute__((aligned(32)));
+static unsigned short int framebufferC[640*480] __attribute__((aligned(32)));
 
 int vga_hres;
 int vga_vres;
 
+unsigned short int *vga_frontbuffer; /* < buffer currently displayed (or request sent to HW) */
+unsigned short int *vga_backbuffer;  /* < buffer currently drawn to, never read by HW */
+unsigned short int *vga_lastbuffer;  /* < buffer displayed just before (or HW finishing last scan) */
 
 void vga_init()
 {
-    vga_hres = 640;
-    vga_vres = 480;
+	vga_hres = 640;
+	vga_vres = 480;
+	
+	vga_frontbuffer = framebufferA;
+	vga_backbuffer = framebufferB;
+	vga_lastbuffer = framebufferC;
+	
+	CSR_VGA_BASEADDRESS = (unsigned int)vga_frontbuffer;
 
-    SDL_InitSubSystem(SDL_INIT_VIDEO);
+	/* by default, VGA core puts out 640x480@60Hz */
+	CSR_VGA_RESET = 0;
 
-    unsigned int gmask = 0x0000F800;
-    unsigned int rmask = 0x000007E0;
-    unsigned int bmask = 0x0000001F;
-    unsigned int amask = 0x00000000;
-
-    SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 5 );
-    SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 5 );
-    SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 5 );
-    SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 16 );
-    SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
-
-
-
-
-    //screen = SDL_SetVideoMode( vga_hres, vga_vres, 16, SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_OPENGL);
-    screen = SDL_SetVideoMode( vga_hres, vga_vres, 16, SDL_HWSURFACE | SDL_DOUBLEBUF );
-    vga_frontbuffer = SDL_CreateRGBSurface(SDL_HWSURFACE, vga_hres, vga_vres, 16, rmask , gmask , bmask , amask);
-    vga_backbuffer = vga_lastbuffer = vga_frontbuffer;
-
+	printf("VGA: initialized at resolution %dx%d\n", vga_hres, vga_vres);
+	printf("VGA: framebuffers at 0x%08x 0x%08x 0x%08x\n",
+		(unsigned int)&framebufferA, (unsigned int)&framebufferB, (unsigned int)&framebufferC);
 }
 
 void vga_disable()
 {
-   SDL_QuitSubSystem(SDL_INIT_VIDEO); 
+	CSR_VGA_RESET = VGA_RESET;
 }
 
 void vga_swap_buffers()
 {
+	unsigned short int *p;
 
-    SDL_UpdateRect(vga_frontbuffer, 0,0,0,0);
-    SDL_BlitSurface(vga_frontbuffer , NULL, screen , NULL);
-    SDL_UpdateRect(screen, 0,0,0,0);
-    SDL_Flip(vga_frontbuffer);
-    //SDL_GL_SwapBuffers( );
+	/*
+	 * Make sure last buffer swap has been executed.
+	 * Beware, DMA address registers of vgafb are incomplete
+	 * (only LSBs are present) so don't compare them directly
+	 * with CPU pointers.
+	 */
+	while(CSR_VGA_BASEADDRESS_ACT != CSR_VGA_BASEADDRESS);
+
+	p = vga_frontbuffer;
+	vga_frontbuffer = vga_backbuffer;
+	vga_backbuffer = vga_lastbuffer;
+	vga_lastbuffer = p;
+	
+	CSR_VGA_BASEADDRESS = (unsigned int)vga_frontbuffer;
 }
