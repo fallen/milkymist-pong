@@ -1,7 +1,14 @@
 #ifndef __VGA_H
 #define __VGA_H
 
+#ifdef __SDLSDK__
 #include <SDL/SDL.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+
+
+#endif
+
 extern int vga_hres;
 extern int vga_vres;
 

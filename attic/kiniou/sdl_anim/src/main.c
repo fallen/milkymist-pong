@@ -1,7 +1,13 @@
 
-#ifdef SDLSDK
-#include <stdio.h> //<-replace it with console.h from Milkymist
+#ifdef __SDLSDK__ //We are debugging on a computer :)
+
+#include <stdio.h> 
 #include <SDL/SDL.h>
+
+#elif // We are debugging on MilkyMist
+
+#include <console.h>
+
 #endif
 
 
@@ -10,7 +16,7 @@
 #include "transition.h"
 #include "vga.h"
 
-#include "../data/badclouds.png.h"
+#include "badclouds.png.h"
 
 int main() {
 
@@ -18,7 +24,7 @@ int main() {
     vga_init();
     sprites_init();
 
-    sprites_load(data_badclouds_raw,data_badclouds_raw_len,0xFFFF,138,100,4);
+    sprites_load(badclouds_raw,badclouds_raw_len,0xFFFF,138,100,4);
     debug_sprite(&sprite_data[0]);
 
 

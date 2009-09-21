@@ -1,9 +1,5 @@
 #include "vga.h"
 
-#ifdef SDLSDK
-#include <SDL/SDL.h>
-#endif
-
 SDL_Surface * screen;
 SDL_Surface * vga_frontbuffer;
 SDL_Surface * vga_backbuffer;
@@ -26,8 +22,17 @@ void vga_init()
     unsigned int bmask = 0x0000001F;
     unsigned int amask = 0x00000000;
 
+    SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 5 );
+    SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 5 );
+    SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 5 );
+    SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 16 );
+    SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
 
-    screen = SDL_SetVideoMode( vga_hres, vga_vres, 16, SDL_HWSURFACE | SDL_DOUBLEBUF);
+
+
+
+    //screen = SDL_SetVideoMode( vga_hres, vga_vres, 16, SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_OPENGL);
+    screen = SDL_SetVideoMode( vga_hres, vga_vres, 16, SDL_HWSURFACE | SDL_DOUBLEBUF );
     vga_frontbuffer = SDL_CreateRGBSurface(SDL_HWSURFACE, vga_hres, vga_vres, 16, rmask , gmask , bmask , amask);
     vga_backbuffer = vga_lastbuffer = vga_frontbuffer;
 
@@ -45,4 +50,5 @@ void vga_swap_buffers()
     SDL_BlitSurface(vga_frontbuffer , NULL, screen , NULL);
     SDL_UpdateRect(screen, 0,0,0,0);
     SDL_Flip(vga_frontbuffer);
+    //SDL_GL_SwapBuffers( );
 }
