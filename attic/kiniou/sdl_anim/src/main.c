@@ -45,11 +45,11 @@ int main() {
         quit = scan_keys();
         x = 50;
 
-        for (y=0;y<sprite_data[0].size_vres;y++)
-        {
-            vga_position = &(vga_frontbuffer[x + y * vga_hres]);
-            memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
-        }
+//        for (y=0;y<sprite_data[0].size_vres;y++)
+//        {
+//            vga_position = &(vga_frontbuffer[x + y * vga_hres]);
+//            memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
+//        }
         vga_swap_buffers();
         demo_sleep(100);
     }

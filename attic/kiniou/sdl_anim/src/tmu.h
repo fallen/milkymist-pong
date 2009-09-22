@@ -18,7 +18,9 @@
 #ifndef __TMU_H
 #define __TMU_H
 
+#ifndef __SDLSDK__
 #include <hw/tmu.h>
+#endif
 
 struct tmu_td;
 

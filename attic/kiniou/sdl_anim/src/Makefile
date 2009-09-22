@@ -4,14 +4,14 @@ SERIALPORT?=/dev/ttyUSB0
 
 ifeq ($(strip $(SDL_DEBUG)),1)
 include ./makefile-sdl
-OBJECTS=main.o vga_sdl.o sprites.o demo_1.o key.o transition.o 
+OBJECTS=main.o vga_sdl.o sprites.o demo_1.o key.o transition.o tmu_sdl.o 
 else
 include $(MMDIR)/software/include.mak
 #OBJECTS=crt0.o main.o vga.o sprites.o demo_1.o key.o transition.o 
 OBJECTS=crt0.o isr.o brd.o time.o mem.o vga.o snd.o tmu.o pfpu.o line.o fontmb.o text.o intro.o main.o mod.o music.o sprites.o transition.o key.o 
 endif
 
-DATA=badclouds.png
+DATA=badclouds.png badfactory.png
 DATA_RAW=$(addsuffix .raw, $(basename $(DATA)) )
 DATA_H=$(addsuffix .h, $(DATA) ) 
 SEGMENTS=-j .text -j .data -j .rodata
@@ -25,7 +25,7 @@ ifeq ($(strip $(SDL_DEBUG)),1)
 %.bin: %.elf
 	cp $< $@
 
-boot.elf: $(DATA) $(OBJECTS)
+boot.elf: $(DATA_H) $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
 else
 %.bin: %.elf
