@@ -81,6 +81,7 @@ int file_open(file_context_t* fc, const char* path)
     goto on_error;
 
   fc->size = st.st_size;
+  DEBUG_PRINTF("file size: %ld\n", fc->size);
 
 #ifdef USE_MMAP
   {
@@ -108,8 +109,10 @@ int file_open(file_context_t* fc, const char* path)
 	nread = read(fd, p, (size_t)size);
 	if (nread <= 0)
 	  {
-	    DEBUG_ERROR("read() == %d\n", errno);
+	    DEBUG_ERROR("read() == %d (bytes remaining: %ld)\n", errno, size);
 	    close(fd);
+	    if(nread == 0)
+	      return 0; /* hack for Windows */
 	    goto on_error;
 	  }
 
