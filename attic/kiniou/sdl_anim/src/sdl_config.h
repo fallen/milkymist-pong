@@ -4,14 +4,15 @@
 #include <SDL/SDL.h>
 #include <stdio.h>
 
-#include "vga.h"
-#include "tmu.h"
+#include "vga_sdl.h"
+#include "tmu_sdl.h"
 
 #include "demo_1.h"
 #include "sprites.h"
 #include "transition.h"
 
 #include "badclouds.png.h"
+#include "badfactory.png.h"
 
 static SDL_Event event;
 

@@ -26,6 +26,7 @@ void sprites_load(unsigned char * data, unsigned int data_len, unsigned int colo
     unsigned int nb_frames;
 
     len = grid_hres * grid_vres ;
+
     if (len > data_len)
     {
         printf("Error : grid size of image too big (%u > %u) \n", len , data_len);

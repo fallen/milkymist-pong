@@ -24,4 +24,5 @@ void sprites_load(unsigned char * data, unsigned int data_len, unsigned int colo
 void sprites_init();
 
 void debug_sprite(t_sprite * s);
+
 #endif //__SPRITES_H
