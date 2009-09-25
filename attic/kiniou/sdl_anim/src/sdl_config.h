@@ -3,6 +3,8 @@
 
 #include <SDL/SDL.h>
 #include <stdio.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
 
 #include "vga_sdl.h"
 #include "tmu_sdl.h"
