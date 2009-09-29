@@ -1,11 +1,19 @@
 #include "sprites.h"
 
+#ifdef __SDLSDK__
+#include <SDL/SDL.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+#endif
+
+
 t_sprite sprite_data[4096];
 unsigned int sprite_index;
 
 void sprites_init()
 {
     sprite_index = 0;
+    memset(sprite_data, sizeof(t_sprite) * 4096,0);
 }
 
 void debug_sprite(t_sprite * s)
@@ -55,7 +63,18 @@ void sprites_load(unsigned char * data, unsigned int data_len, unsigned int colo
     sprite_data[sprite_index].len = len;
 
 
-    
+/*#ifdef __SDLSDK__
+        glGenTextures(1,&(sprite_data[sprite_index].gltexid));
+    printf("SPRITE GL ERROR : %s\n", gluErrorString(glGetError()));
+        glBindTexture(GL_TEXTURE_2D,sprite_data[sprite_index].gltexid);
+    printf("SPRITE GL ERROR : %s\n", gluErrorString(glGetError()));
+        glTexImage2D(GL_TEXTURE_2D, 0, 4, 1024, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        //glTexImage2D(GL_TEXTURE_2D, 0, 3, grid_hres, grid_vres, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, sprite_data[sprite_index].data);
+    printf("SPRITE GL ERROR : %s\n", gluErrorString(glGetError()));
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, grid_hres, grid_vres, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, sprite_data[sprite_index].data);
+    printf("SPRITE GL ERROR : %s\n", gluErrorString(glGetError()));
+#endif
+  */  
     sprite_data[sprite_index].colorkey = colorkey;
     sprite_index+=1;
 }

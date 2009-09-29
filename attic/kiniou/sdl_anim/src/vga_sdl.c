@@ -46,9 +46,8 @@ END\
 
 char program_string[] = 
 "!!ARBfp1.0\n"
-"OPTION ARB;\n"
 "ATTRIB tex = fragment.texcoord[0]; \n"
-"PARAM key = { program.env[0] }; \n"
+"PARAM key = {1.0,0.0,1.0,1.0}; \n"
 "PARAM c_transparent = {0.0,0.0,0.0,0.0}; \n"
 "OUTPUT c_out = result.color; \n"
 
@@ -81,6 +80,7 @@ static void initGL()
     glPixelStorei(GL_UNPACK_LSB_FIRST , 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT , 1);
 
+    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);

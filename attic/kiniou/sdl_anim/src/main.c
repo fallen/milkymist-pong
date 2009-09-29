@@ -15,7 +15,7 @@ static void tmu_complete(struct tmu_td *td)
 }
 
 
-void test_GL()
+void test_GL(int index)
 {
     GLint errPos;
     unsigned char *errString;
@@ -27,19 +27,12 @@ void test_GL()
     b=1.0;
     a=1.0;
 
-    glEnable(GL_FRAGMENT_PROGRAM_ARB);
-    
-    glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, shader_num);
-    
-    glProgramEnvParameter4fARB(GL_FRAGMENT_PROGRAM_ARB, 0, 0.0, 0.0, 1.0, 1.0);
-    printf("Parameter fragment GL ERROR : %s\n", gluErrorString(glGetError()));
-
-
-    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
     
 //    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 138, 100, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, sprite_data[0].data);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 138, 100, GL_RGBA, GL_UNSIGNED_SHORT_5_6_5, sprite_data[0].data);
-
+    //glBindTexture(GL_TEXTURE_2D,sprite_data[0].gltexid);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 138, 100, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, sprite_data[index].data);
+    //printf("%d\n",sprite_data[0].gltexid);
+    //printf("GL ERROR : %s\n", gluErrorString(glGetError()));
 
 
 
@@ -51,24 +44,22 @@ void test_GL()
 
     glEnable(GL_BLEND);
 
-   //glBlendEquation(GL_FUNC_ADD);
-//   glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
-    //glBlendFunc(GL_ONE,GL_DST_ALPHA);
-    //glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_SRC_ALPHA);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glBlendColor(0,0,1,0);
-//  glClearColor (0.0f, 0.0f, 1.0f, 0.0f);        /* Light Grey Background */
+    glEnable(GL_FRAGMENT_PROGRAM_ARB);
+    
+    glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, shader_num);
+    
+//    glProgramLocalParameter4fARB(GL_FRAGMENT_PROGRAM_ARB, 0, 0.0, 0.0, 1.0, 1.0);
+//    printf("Parameter fragment GL ERROR : %s\n", gluErrorString(glGetError()));
 
-    //glColor4f(0,0,1,1);
+
             glBegin(GL_TRIANGLE_STRIP);  /* Begin Drawing A Single Quad */
                 glTexCoord2f(0,0);glVertex2i(0, 0);
                 glTexCoord2f(0,100.0/512.0);glVertex2i(0, 100);
                 glTexCoord2f(138.0/1024.0,0);glVertex2i(138, 0);
                 glTexCoord2f(138.0/1024.0,100.0/512.0);glVertex2i(138, 100);
             glEnd();                        /* Done Drawing The Textured Quad */
-  //  printf("GL ERROR : %s\n", gluErrorString(glGetError()));
-//  glClearColor (0.0f, 0.0f, 0.0f, 0.0f);        /* Light Grey Background */
     glDisable(GL_FRAGMENT_PROGRAM_ARB);
     
 }
@@ -207,7 +198,7 @@ int main() {
 //            memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
 //        }
 
-        test_GL();
+        test_GL(x/20);
 
 //        tmu_wait = 0;
 //        tmu_submit_task(&tmu_clearscreen);
@@ -220,7 +211,7 @@ int main() {
         flush_bridge_cache();
 
         vga_swap_buffers();
-        demo_sleep(100);
+        demo_sleep(10);
     }
 
     demo_quit();

@@ -13,6 +13,8 @@ typedef struct _t_sprite {
     int size_vres;
     unsigned int len;
     unsigned int colorkey;
+    unsigned int gltexid;
+
 } t_sprite;
 
 
