@@ -1,13 +1,14 @@
-#include "vga.h"
+#include "vga_sdl.h"
 
 
 #ifdef __SDLSDK__
 #include <SDL/SDL.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#include <GL/glext.h>
 
 #endif
-static unsigned short int framebufferA[640*480];
+static unsigned short int framebufferA[1024*512];
 
 static SDL_Surface * screen;
 //static SDL_Surface * buffer;
@@ -23,6 +24,43 @@ unsigned short int *vga_lastbuffer;  /* < buffer displayed just before (or HW fi
 int vga_hres;
 int vga_vres;
 
+unsigned int shader_num;
+
+/*Color Key fragment program*/
+//char program_string[] = "\
+!!ARBfp1.0  \
+ATTRIB tex = fragment.texcoord[0]; \
+PARAM key = {0.0,0.0,1.0,1.0}; \
+PARAM c_transparent = {0.0,0.0,0.0,0.0}; \
+OUTPUT c_out = result.color; \
+\
+TEMP c_orig , c_add, dot; \
+\
+TEX c_orig , tex , texture[0] , 2D; \
+SUB c_add, key , c_orig;\
+DP3 dot , c_add , key;\
+MUL c_out , dot , c_orig;\
+\
+END\
+";
+
+char program_string[] = 
+"!!ARBfp1.0\n"
+"OPTION ARB;\n"
+"ATTRIB tex = fragment.texcoord[0]; \n"
+"PARAM key = { program.env[0] }; \n"
+"PARAM c_transparent = {0.0,0.0,0.0,0.0}; \n"
+"OUTPUT c_out = result.color; \n"
+
+"TEMP c_orig , c_add, dot; \n"
+
+"TEX c_orig , tex , texture[0] , 2D; \n"
+"SUB c_add, key , c_orig;\n"
+"DP3 dot , c_add , key;\n"
+"MUL c_out , dot , c_orig;\n"
+
+"END\n"
+;
 
 /* gets next power of two */
 static int pot(int x) {
@@ -35,29 +73,81 @@ static int pot(int x) {
 
 static void initGL()
 {
-   /* Start Of User Initialization */
+
+    GLint errPos;
+    unsigned char *errString;
+
+    glPixelStorei(GL_UNPACK_SWAP_BYTES , 1);
+    glPixelStorei(GL_UNPACK_LSB_FIRST , 1);
+    glPixelStorei(GL_UNPACK_ALIGNMENT , 1);
+
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 128, 128, 0, GL_RGB, GL_UNSIGNED_BYTE, vga_frontbuffer);
-    printf("GL ERROR : %s\n", gluErrorString(glGetError()));
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, 4, 1024, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
     glHint (GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);           /* Realy Nice perspective calculations */
-    
-    glClearColor (0.0f, 0.0f, 0.0f, 0.0f);        /* Light Grey Background */
+
+    glClearColor (1.0f, 0.0f, 0.0f, 0.0f);        /* Light Grey Background */
     glClearDepth (1.0f);                                        /* Depth Buffer Setup */
 
     glDepthFunc (GL_LEQUAL);                                    /* The Type Of Depth Test To Do */
     glEnable (GL_DEPTH_TEST);                                 /* Enable Depth Testing */
+   // glEnable(GL_ALPHA_TEST);
 
     glShadeModel (GL_SMOOTH);                                 /* Enables Smooth Color Shading */
     glDisable (GL_LINE_SMOOTH);                               /* Initially Disable Line Smoothing */
 
-    glEnable(GL_COLOR_MATERIAL);                            /* Enable Color Material (Allows Us To Tint Textures) */
-    
+    //glEnable(GL_COLOR_MATERIAL);                            /* Enable Color Material (Allows Us To Tint Textures) */
+    glDisable(GL_COLOR_MATERIAL);                            /* Enable Color Material (Allows Us To Tint Textures) */
+
     glEnable(GL_TEXTURE_2D);                                    /* Enable Texture Mapping */
+
+//    glEnable(GL_LIGHT0);                                            /* Enable Light0 (Default GL Light) */
+
+    
+
+    glEnable(GL_FRAGMENT_PROGRAM_ARB);
+    printf("GL ERROR : %s\n", gluErrorString(glGetError()));
+
+    glGenProgramsARB(1, &shader_num);
+    glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, shader_num);
+    printf("GL ERROR : %s\n", gluErrorString(glGetError()));
+
+    glProgramStringARB(GL_FRAGMENT_PROGRAM_ARB, GL_PROGRAM_FORMAT_ASCII_ARB, strlen(program_string), program_string);
+
+if (GL_INVALID_OPERATION == glGetError())
+{
+    // Find the error position
+    glGetIntegerv(GL_PROGRAM_ERROR_POSITION_ARB, &errPos ); 
  
+    // Print implementation-dependent program
+    // errors and warnings string.
+    errString = glGetString(GL_PROGRAM_ERROR_STRING_ARB); 
+ 
+    fprintf(stderr, "error at position: %d\n%s\n", errPos, errString);
+}
+ //   printf("GL ERROR : %s %d\n", gluErrorString(glGetError()), strlen(program_string));
+
+    glDisable(GL_FRAGMENT_PROGRAM_ARB);
+
+
+
+            glViewport (0, 0,vga_hres, vga_vres);
+            glMatrixMode (GL_PROJECTION);       /* Select The Projection Matrix */
+            glLoadIdentity ();                          /* Reset The Projection Matrix */
+            /* Set Up Ortho Mode To Fit 1/4 The Screen (Size Of A Viewport) */
+            glOrtho(0, vga_hres, vga_vres, 0, -99999 , 99999);
+
+glMatrixMode (GL_MODELVIEW);
+    glLoadIdentity ();
+
+    glDisable (GL_DEPTH_TEST);
+    glDisable (GL_CULL_FACE);
+
+
+
 }
 
 void vga_init()
@@ -67,11 +157,47 @@ void vga_init()
     int x;
     unsigned short int color;
 
-    SDL_Init(SDL_INIT_VIDEO);
+    const SDL_VideoInfo *videoInfo;
+    int videoFlags;
+
+if ( SDL_Init( SDL_INIT_VIDEO ) < 0 )
+        {
+        fprintf( stderr, "Video initialization failed: %s\n",
+             SDL_GetError( ) );
+        SDL_Quit();
+        }
+
+    /* Fetch the video info */
+    videoInfo = SDL_GetVideoInfo( );
+
+    if ( !videoInfo )
+        {
+        fprintf( stderr, "Video query failed: %s\n",
+             SDL_GetError( ) );
+        SDL_Quit();
+        }
+
+/* the flags to pass to SDL_SetVideoMode */
+    videoFlags  = SDL_OPENGL;          /* Enable OpenGL in SDL */
+    videoFlags |= SDL_GL_DOUBLEBUFFER; /* Enable double buffering */
+    videoFlags |= SDL_HWPALETTE;       /* Store the palette in hardware */
+    videoFlags |= SDL_RESIZABLE;       /* Enable window resizing */
+
+    /* This checks to see if surfaces can be stored in memory */
+    if ( videoInfo->hw_available )
+            videoFlags |= SDL_HWSURFACE;
+    else
+            videoFlags |= SDL_SWSURFACE;
+
+
     SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+    SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 8 );
+    SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 8 );
+    SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 8 );
+    SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE, 8 );
 
-    screen = SDL_SetVideoMode( vga_hres, vga_vres, 16, SDL_SWSURFACE | SDL_OPENGL | SDL_GL_DOUBLEBUFFER | SDL_HWPALETTE );
-
+    screen = SDL_SetVideoMode( vga_hres, vga_vres, 32, videoFlags);
+    SDL_WM_SetCaption("Milkymist Democompo", NULL);
 
     //Good code for simple SDL copy image to framebuffer
     //buffer = SDL_CreateRGBSurface(0 , vga_hres, vga_vres, 16, rmask , gmask , bmask , amask);
@@ -94,35 +220,14 @@ void vga_disable()
    SDL_QuitSubSystem(SDL_INIT_VIDEO); 
 }
 
+
+
 void vga_swap_buffers()
 {
-
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 128, 128, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, vga_frontbuffer);
-    //printf("GL ERROR : %s\n", gluErrorString(glGetError()));
-
-    glClear (GL_COLOR_BUFFER_BIT);
-
-    glColor3f(1,1,1);
-            glViewport (0, vga_hres, vga_vres, 0);
-            glMatrixMode (GL_PROJECTION);       /* Select The Projection Matrix */
-            glLoadIdentity ();                          /* Reset The Projection Matrix */
-            /* Set Up Ortho Mode To Fit 1/4 The Screen (Size Of A Viewport) */
-            gluOrtho2D(0, vga_hres, vga_hres, 0);
-
-    glMatrixMode (GL_MODELVIEW);            /* Select The Modelview Matrix */
-    glLoadIdentity ();                              /* Reset The Modelview Matrix */
-
-    glClear (GL_DEPTH_BUFFER_BIT);      /* Clear Depth Buffer */
-
-            glBegin(GL_QUADS);  /* Begin Drawing A Single Quad */
-                /* We Fill The Entire 1/4 Section With A Single Textured Quad. */
-                glTexCoord2f(1.0f, 0.0f); glVertex2i(vga_hres, 0              );
-                glTexCoord2f(0.0f, 0.0f); glVertex2i(0,              0              );
-                glTexCoord2f(0.0f, 1.0f); glVertex2i(0,              vga_vres);
-                glTexCoord2f(1.0f, 1.0f); glVertex2i(vga_hres, vga_vres);
-            glEnd();                        /* Done Drawing The Textured Quad */
-
-    glFlush();
-
     SDL_GL_SwapBuffers( );
+}
+
+void flush_bridge_cache()
+{
+    glFlush();
 }

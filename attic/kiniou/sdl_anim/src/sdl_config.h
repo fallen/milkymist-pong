@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#include <GL/glext.h>
 
 #include "vga_sdl.h"
 #include "tmu_sdl.h"
@@ -33,6 +34,9 @@ int scan_keys() {
         while ( SDL_PollEvent(&event) )
         {
             switch( event.type ){
+                case SDL_QUIT:
+                    return 1;
+                    break;
                 case SDL_KEYDOWN:
                     printf( "Key press detected\n" );
                     switch( event.key.keysym.sym ){

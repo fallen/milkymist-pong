@@ -15,6 +15,65 @@ static void tmu_complete(struct tmu_td *td)
 }
 
 
+void test_GL()
+{
+    GLint errPos;
+    unsigned char *errString;
+
+    GLfloat r,g,b,a;
+
+    r=0.0;
+    g=0.0;
+    b=1.0;
+    a=1.0;
+
+    glEnable(GL_FRAGMENT_PROGRAM_ARB);
+    
+    glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, shader_num);
+    
+    glProgramEnvParameter4fARB(GL_FRAGMENT_PROGRAM_ARB, 0, 0.0, 0.0, 1.0, 1.0);
+    printf("Parameter fragment GL ERROR : %s\n", gluErrorString(glGetError()));
+
+
+    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
+    
+//    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 138, 100, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, sprite_data[0].data);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 138, 100, GL_RGBA, GL_UNSIGNED_SHORT_5_6_5, sprite_data[0].data);
+
+
+
+
+    glClear (GL_COLOR_BUFFER_BIT);                  /* Clear Screen */
+
+    glMatrixMode (GL_MODELVIEW);            /* Select The Modelview Matrix */
+    glLoadIdentity ();                              /* Reset The Modelview Matrix */
+    glClear (GL_DEPTH_BUFFER_BIT);      /* Clear Depth Buffer */
+
+    glEnable(GL_BLEND);
+
+   //glBlendEquation(GL_FUNC_ADD);
+//   glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+    //glBlendFunc(GL_ONE,GL_DST_ALPHA);
+    //glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_SRC_ALPHA);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBlendColor(0,0,1,0);
+//  glClearColor (0.0f, 0.0f, 1.0f, 0.0f);        /* Light Grey Background */
+
+    //glColor4f(0,0,1,1);
+            glBegin(GL_TRIANGLE_STRIP);  /* Begin Drawing A Single Quad */
+                glTexCoord2f(0,0);glVertex2i(0, 0);
+                glTexCoord2f(0,100.0/512.0);glVertex2i(0, 100);
+                glTexCoord2f(138.0/1024.0,0);glVertex2i(138, 0);
+                glTexCoord2f(138.0/1024.0,100.0/512.0);glVertex2i(138, 100);
+            glEnd();                        /* Done Drawing The Textured Quad */
+  //  printf("GL ERROR : %s\n", gluErrorString(glGetError()));
+//  glClearColor (0.0f, 0.0f, 0.0f, 0.0f);        /* Light Grey Background */
+    glDisable(GL_FRAGMENT_PROGRAM_ARB);
+    
+}
+
+
 int main() {
 
 
@@ -34,7 +93,9 @@ int main() {
     vga_init();
 #ifndef __SDLSDK__
     snd_init();
+#endif
     tmu_init();
+#ifndef __SDLSDK__
     pfpu_init();
 #endif
 
@@ -48,9 +109,6 @@ int main() {
     static struct tmu_vertex src_clr_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
     static struct tmu_vertex dst_clr_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
 
-    
-
-
     int quit = 0;
     unsigned int x , y ;
 
@@ -63,7 +121,7 @@ int main() {
     sprites_load(badclouds_raw,badclouds_raw_len,0x001F,138,100,2);
     sprites_load(badclouds_raw,badclouds_raw_len,0x001F,138,100,3);
     sprites_load(badclouds_raw,badclouds_raw_len,0x001F,138,100,4);
-    sprites_load(badfactory_raw,badfactory_raw_len,0x001F,138,100,4);
+    sprites_load(badfactory_raw,badfactory_raw_len,0x001F,100,100,0);
 //    debug_sprite(&sprite_data[0]);
 
 #define CHROMAKEY  0x001f
@@ -135,7 +193,6 @@ int main() {
         tmu_task.srcfbuf = sprite_data[x/20].data;
         tmu_task.dstfbuf = vga_backbuffer;
         tmu_clearscreen.srcfbuf = &black;
-        //tmu_clearscreen.srcfbuf = vga_frontbuffer;
         tmu_clearscreen.dstfbuf = vga_backbuffer;
         quit = scan_keys();
         x += 1;
@@ -149,13 +206,16 @@ int main() {
 //            vga_position = &(vga_frontbuffer[x + y * vga_hres]);
 //            memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
 //        }
-        tmu_wait = 0;
-        tmu_submit_task(&tmu_clearscreen);
-        while(!tmu_wait);
 
-        tmu_wait = 0;
-        tmu_submit_task(&tmu_task);
-        while(!tmu_wait);
+        test_GL();
+
+//        tmu_wait = 0;
+//        tmu_submit_task(&tmu_clearscreen);
+//        while(!tmu_wait);
+//
+//        tmu_wait = 0;
+//        tmu_submit_task(&tmu_task);
+//        while(!tmu_wait);
 
         flush_bridge_cache();
 

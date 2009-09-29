@@ -15,8 +15,12 @@ extern unsigned short int *vga_frontbuffer;
 extern unsigned short int *vga_backbuffer;
 extern unsigned short int *vga_lastbuffer;
 
+extern unsigned int shader_num;
+
 void vga_init();
 void vga_disable();
 void vga_swap_buffers();
+
+void flush_bridge_cache();
 
 #endif //__VGA_H

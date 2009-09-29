@@ -25,6 +25,7 @@ void sprites_load(unsigned char * data, unsigned int data_len, unsigned int colo
     unsigned int len,start;
     unsigned int nb_frames;
 
+
     len = grid_hres * grid_vres ;
 
     if (len > data_len)
@@ -52,6 +53,8 @@ void sprites_load(unsigned char * data, unsigned int data_len, unsigned int colo
 
     sprite_data[sprite_index].data = &((unsigned short int *) data)[start];
     sprite_data[sprite_index].len = len;
+
+
     
     sprite_data[sprite_index].colorkey = colorkey;
     sprite_index+=1;
