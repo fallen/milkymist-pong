@@ -20,21 +20,8 @@ void test_GL(int index)
     GLint errPos;
     unsigned char *errString;
 
-    GLfloat r,g,b,a;
-
-    r=0.0;
-    g=0.0;
-    b=1.0;
-    a=1.0;
-
     
-//    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 138, 100, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, sprite_data[0].data);
-    //glBindTexture(GL_TEXTURE_2D,sprite_data[0].gltexid);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 138, 100, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, sprite_data[index].data);
-    //printf("%d\n",sprite_data[0].gltexid);
-    //printf("GL ERROR : %s\n", gluErrorString(glGetError()));
-
-
 
     glClear (GL_COLOR_BUFFER_BIT);                  /* Clear Screen */
 
@@ -49,10 +36,6 @@ void test_GL(int index)
     glEnable(GL_FRAGMENT_PROGRAM_ARB);
     
     glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, shader_num);
-    
-//    glProgramLocalParameter4fARB(GL_FRAGMENT_PROGRAM_ARB, 0, 0.0, 0.0, 1.0, 1.0);
-//    printf("Parameter fragment GL ERROR : %s\n", gluErrorString(glGetError()));
-
 
             glBegin(GL_TRIANGLE_STRIP);  /* Begin Drawing A Single Quad */
                 glTexCoord2f(0,0);glVertex2i(0, 0);
@@ -122,10 +105,10 @@ int main() {
 
     for ( x = 0; x <= HMESHLAST; x++) {
         for ( y = 0; y <= VMESHLAST; y++) {
-            src_vertices[x][y].x = x * 138 / HMESHLAST; 
-            src_vertices[x][y].y = y * 100 / VMESHLAST;
-            dst_vertices[x][y].x = x * 69 / HMESHLAST + 100; 
-            dst_vertices[x][y].y = y * 50 / VMESHLAST + 100;
+            src_vertices[x][y].x = x * 138; 
+            src_vertices[x][y].y = y * 100;
+            dst_vertices[x][y].x = x + 100; 
+            dst_vertices[x][y].y = y + 100;
         }
     }
 
@@ -198,16 +181,16 @@ int main() {
 //            memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
 //        }
 
-        test_GL(x/20);
+//        test_GL(x/20);
 
-//        tmu_wait = 0;
-//        tmu_submit_task(&tmu_clearscreen);
-//        while(!tmu_wait);
-//
-//        tmu_wait = 0;
-//        tmu_submit_task(&tmu_task);
-//        while(!tmu_wait);
+        tmu_wait = 0;
+        tmu_submit_task(&tmu_clearscreen);
+        while(!tmu_wait);
 
+/*        tmu_wait = 0;
+        tmu_submit_task(&tmu_task);
+        while(!tmu_wait);
+*/
         flush_bridge_cache();
 
         vga_swap_buffers();

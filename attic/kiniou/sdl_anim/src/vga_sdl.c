@@ -89,7 +89,7 @@ static void initGL()
 
     glHint (GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);           /* Realy Nice perspective calculations */
 
-    glClearColor (1.0f, 0.0f, 0.0f, 0.0f);        /* Light Grey Background */
+    glClearColor (0.0f, 0.0f, 0.0f, 0.0f);        /* Light Grey Background */
     glClearDepth (1.0f);                                        /* Depth Buffer Setup */
 
     glDepthFunc (GL_LEQUAL);                                    /* The Type Of Depth Test To Do */
