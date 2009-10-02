@@ -181,7 +181,7 @@ if ( SDL_Init( SDL_INIT_VIDEO ) < 0 )
     videoFlags  = SDL_OPENGL;          /* Enable OpenGL in SDL */
     videoFlags |= SDL_GL_DOUBLEBUFFER; /* Enable double buffering */
     videoFlags |= SDL_HWPALETTE;       /* Store the palette in hardware */
-    videoFlags |= SDL_RESIZABLE;       /* Enable window resizing */
+    //videoFlags |= SDL_RESIZABLE;       /* Enable window resizing */
 
     /* This checks to see if surfaces can be stored in memory */
     if ( videoInfo->hw_available )
@@ -225,6 +225,7 @@ void vga_disable()
 void vga_swap_buffers()
 {
     SDL_GL_SwapBuffers( );
+    glClear (GL_COLOR_BUFFER_BIT);                  /* Clear Screen */
 }
 
 void flush_bridge_cache()

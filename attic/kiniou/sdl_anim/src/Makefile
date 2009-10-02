@@ -8,7 +8,7 @@ OBJECTS=main.o vga_sdl.o sprites.o demo_1.o key.o transition.o tmu_sdl.o
 else
 include $(MMDIR)/software/include.mak
 #OBJECTS=crt0.o main.o vga.o sprites.o demo_1.o key.o transition.o 
-OBJECTS=crt0.o isr.o brd.o time.o mem.o vga.o snd.o tmu.o pfpu.o line.o fontmb.o text.o intro.o main.o mod.o music.o sprites.o transition.o key.o 
+OBJECTS=crt0.o isr.o brd.o time.o mem.o vga.o snd.o tmu.o pfpu.o line.o fontmb.o text.o intro.o main.o mod.o music.o sprites.o transition.o key.o intro.o demo_1.o demo_2.o
 endif
 
 DATA=badclouds.png badfactory.png

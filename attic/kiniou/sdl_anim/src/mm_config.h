@@ -28,6 +28,7 @@
 #include "transition.h"
 
 #include "badclouds.png.h"
+#include "badfactory.png.h"
 
 static void banner()
 {
