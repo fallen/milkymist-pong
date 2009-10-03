@@ -1,5 +1,5 @@
 
-SOURCES=main.c pcm.c mod.c file.c
+SOURCES=main.c pcm.c ../../../src/mod.c file.c
 TARGET=main
 
 NAMES=$(basename $(SOURCES))
@@ -36,7 +36,9 @@ run:
 	ffplay out.wav
 
 play:
-	./main ../data/10.mod
+	./main ../data/9.mod
+#	./main ../data/10.mod
+#	./main ../data/090922.mod
 	sox -L -r 48000 -t raw -b 2 -s -2 -c 2 output.raw -t wav out.wav 
 	ffplay out.wav
 

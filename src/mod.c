@@ -353,16 +353,13 @@ static unsigned int find_note_by_pitch(unsigned int);
 
 static void inline update_chan_period(chan_state_t* cs)
 {
-  unsigned int smprate;
-  unsigned int div;
-
-  div = ((cs->currentperiod*cs->modperiod)>>16) * 2;
-  if(div == 0)
-    cs->samplestep = 1;
-  else {
-    smprate = PAL_SYNC_RATE / div;
-    cs->samplestep = (smprate << 16) / 48000;
-  }
+  uint32_t period=cs->currentperiod;
+  period=(period*cs->arpmod)>>16;
+  period=(period*cs->modperiod)>>16;
+  cs->smprate = PAL_SYNC_RATE / (period * 2);
+  cs->samplestep = (cs->smprate << 16) / 48000;
+  // oops 9.mod break here if we but cs->period(slides to notes)
+  // and 10.mod break if we have cs->currentperiod(ever increasing arpeggio)
   cs->note = find_note_by_pitch(cs->currentperiod);
 }
 
@@ -446,6 +443,16 @@ static unsigned int find_note_by_pitch(unsigned int pitch)
   return MAX_NOTE;
 }
 
+static uint32_t relative_semitones[]={
+  0x00006597,0x00006ba2,0x00007208,0x000078d0,
+  0x00007fff,0x0000879c,0x00008fac,0x00009837,
+  0x0000a145,0x0000aadc,0x0000b504,0x0000bfc8,
+  0x0000cb2f,0x0000d744,0x0000e411,0x0000f1a1,
+  0x00010000,0x00010f38,0x00011f59,0x0001306f,
+  0x0001428a,0x000155b8,0x00016a09,0x00017f91,
+  0x0001965f,0x0001ae89,0x0001c823,0x0001e343,
+  0x00020000,0x00021e71,0x00023eb3,0x000260df,
+};
 
 /* arpeggio */
 
@@ -457,34 +464,22 @@ fx_ondiv_arpeggio(mod_context_t* mc, chan_state_t* cs)
      table of period values for each finetunevalue.
    */
 
-  int note;
-
   cs->arpindex = 0;
 
   if (cs->note >= MAX_NOTE)
     {
       /* no previous note */
 
-      cs->arpnotes[0] = cs->currentperiod;
+      cs->arpnotes[0] = relative_semitones[16];
       cs->arpnotes[1] = cs->arpnotes[0];
       cs->arpnotes[2] = cs->arpnotes[0];
 
       return ;
     }
 
-  cs->arpnotes[0] = pitch_table[cs->note][cs->finetune];
-
-  note = cs->note + fx_get_first_param(cs->command);
-  if (note >= MAX_NOTE)
-    note = MAX_NOTE - 1;
-
-  cs->arpnotes[1] = pitch_table[note][cs->finetune];
-
-  note = cs->note + fx_get_second_param(cs->command);
-  if (note >= MAX_NOTE)
-    note = MAX_NOTE - 1;
-
-  cs->arpnotes[2] = pitch_table[note][cs->finetune];
+  cs->arpnotes[0] = relative_semitones[16+0]; 
+  cs->arpnotes[1] = relative_semitones[16-fx_get_first_param(cs->command)]; 
+  cs->arpnotes[2] = relative_semitones[16-fx_get_second_param(cs->command)]; 
 
   DEBUG_FX("notes: %u, %u, %u\n", cs->arpnotes[0], cs->arpnotes[1], cs->arpnotes[2]);
 }
@@ -496,7 +491,10 @@ fx_ontick_arpeggio(mod_context_t* mc, chan_state_t* cs)
   if (cs->arpindex == 3)
     cs->arpindex = 0;
 
-  cs->currentperiod = cs->arpnotes[cs->arpindex++];
+
+  //cs->currentperiod = cs->arpnotes[cs->arpindex++];
+  cs->arpmod=cs->arpnotes[cs->arpindex++];
+
   update_chan_period(cs);
   DEBUG_FX("[%u] arpindex: %u %08x %04x\n", cs->ichan, cs->arpindex,cs->modperiod,cs->currentperiod);
 }
@@ -652,7 +650,7 @@ fx_ontick_vibrato(mod_context_t* mc, chan_state_t* cs)
   mod=mod1+(mod2-mod1)*(0.5+p/(2*15*512.0f));
 
   cs->modperiod=(unsigned int)(mod*0x10000);
-  //DEBUG_FX("vibrato: mod %d %d %d %f %08x\n", p, cs->vibrate,cs->vibdepth,p/(2*512.0f),cs->modperiod);
+  DEBUG_FX("vibrato: mod %d %d %d %f %08x\n", p, cs->vibrate,cs->vibdepth,p/(2*512.0f),cs->modperiod);
   update_chan_period(cs);
 }
 
@@ -713,7 +711,7 @@ fx_ontick_tremolo(mod_context_t* mc, chan_state_t* cs)
 static void
 fx_ondiv_set_sample_offset(mod_context_t* mc, chan_state_t* cs)
 {
-  cs->position = fx_get_byte_param(cs->command) * 256 * 2;
+  cs->position = fx_get_byte_param(cs->command) * 256;
 
   DEBUG_FX("position: %u\n", cs->position);
 }
@@ -802,6 +800,8 @@ fx_ondiv_set_speed(mod_context_t* mc, chan_state_t* cs)
   if (speed <= 32)
     {
       mc->ticksperdivision = speed;
+      mc->tickspersecond = 50;
+      mc->samplespertick = 48000 / mc->tickspersecond;
 
       DEBUG_FX("ticksperdivision: %u\n", mc->ticksperdivision);
     }
@@ -1086,6 +1086,8 @@ chan_init_state(chan_state_t* cs, unsigned int ichan)
 
   cs->ichan = ichan;
   cs->freq = 48000;
+  
+  cs->arpmod=0x10000;
 
   cs->volume = 0x40;
   cs->sample = 1;
@@ -1138,10 +1140,6 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
 
   if(!cs->samplestep) return 0;
 
-  cs->backbuffer[3]=cs->backbuffer[2];
-  cs->backbuffer[2]=cs->backbuffer[1];
-  cs->backbuffer[1]=cs->backbuffer[0];
-
   // advance sample pointer
   cs->fraction+=cs->samplestep;
   cs->position+=(cs->fraction>>16);
@@ -1154,8 +1152,7 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
 	{
 	  //DEBUG_PRINTF("%d %02x loop at %08x.%04x to %04x\n",cs->ichan,cs->sample,cs->position,cs->fraction,roff);
 	  cs->position=roff+(cs->position-roff)%rlength;
-	  cs->fraction=0;
-	  
+	  cs->fraction=0; // when not interpolated, removing this results in lots of aliasing	  
 	}
     }
   else
@@ -1163,15 +1160,38 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
       uint16_t length=mc->s_length[cs->sample-1];
       if(cs->position >= length)
 	{
-// 	  // should really disable instead - current steps outside of sample before stopping!!!
+	  cs->rampsample=64;
+	  cs->lastsample=cs->backbuffer[0];
+	  cs->smprate=0;
 	  cs->samplestep=0;
 	}
     }
 
-  int sample=0;
-  if(cs->samplestep)
-    sample=mc->sdata[cs->sample-1][cs->position+0];
-  cs->backbuffer[0]=sample;
+  if(cs->rampsample)
+    {
+      cs->backbuffer[3]=cs->backbuffer[2]=cs->backbuffer[1]=cs->backbuffer[0]=0; //(cs->lastsample*cs->rampsample)>>6;
+      //printf("ramp cs->backbuffer[0] %2d %3d\n",cs->rampsample,cs->backbuffer[0]);
+      cs->rampsample--;      
+    }
+  
+  if(cs->samplestep==0)
+    cs->backbuffer[3]=cs->backbuffer[2]=cs->backbuffer[1]=cs->backbuffer[0]=0; //(cs->lastsample*cs->rampsample)>>6;
+
+  if(cs->position != cs->lastposition)
+    {
+      int sample=0;
+      cs->backbuffer[3]=cs->backbuffer[2];
+      cs->backbuffer[2]=cs->backbuffer[1];
+      cs->backbuffer[1]=cs->backbuffer[0];
+      
+      int8_t *sptr=(int8_t*)mc->sdata[cs->sample-1];
+      uint32_t pos=cs->position;
+      if(pos>=2 && pos<mc->s_length[cs->sample-1])
+	sample=sptr[pos];
+      cs->backbuffer[0]=sample;
+      
+      cs->lastposition=cs->position;
+    }
 
   volume=(cs->lastvolume*cs->rampvolume+cs->volume*(64-cs->rampvolume))>>0;
   if(cs->rampvolume) cs->rampvolume--;
@@ -1181,13 +1201,24 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
   // Floor
   return (cs->backbuffer[0]*volume)>>6;
 #endif
-#if 1
+#if 0
   {
     // Linear interpolation
     int s0,s1;
     s0=cs->backbuffer[0];
     s1=cs->backbuffer[1];
-    return (((s1*(int)cs->fraction+s0*(0x10000-(int)cs->fraction))>>6)*volume)>>(16);
+    return (((s0*(int)cs->fraction+s1*(0x10000-(int)cs->fraction))>>6)*volume)>>(16);
+  }
+#endif
+#if 0
+  {
+    // Cosine
+    int s0,s1;
+    float mu2;
+    s0=cs->backbuffer[0];
+    s1=cs->backbuffer[1];
+    mu2=(1.0f-cos(cs->fraction*3.1415927f/65536.0f))/2.0f;
+    return (int)(((s0*mu2+s1*(1.0f-mu2)))*volume)>>(6);
   }
 #endif
 #if 0
@@ -1212,12 +1243,55 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
 	    * volume) >>(16+6); 
   }
 #endif
+#if 1
+  {
+    // cubic 2
+    int64_t mu2=(cs->fraction*cs->fraction)>>16;
+    int64_t mu3=(cs->fraction*mu2)>>16;
+    int64_t s0=cs->backbuffer[3]<<16;
+    int64_t s1=cs->backbuffer[2]<<16;
+    int64_t s2=cs->backbuffer[1]<<16;
+    int64_t s3=cs->backbuffer[0]<<16;
+    int64_t a0=s3-s2-s0+s1;
+    int64_t a1=s0-s1-a0;
+    int64_t a2=s2-s0;
+    int64_t a3=s1;
+    return ((((a0*mu3+a1*mu2+a2*cs->fraction)>>16)+a3)*volume)>>(16+6);
+
+  }
+
+#endif
+#if 0
+  // Hermite
+  {
+    float bias=0.0;
+    float tension=0.5;
+    int64_t mu=cs->fraction;                     //            .16 
+    int64_t mu2=(cs->fraction*cs->fraction)>>16; //            .16 mu2=mu*mu
+    int64_t mu3=(mu2*cs->fraction)>>16;              //            .16 mu3=mu2*fraction
+    int64_t s0=cs->backbuffer[3]<<16;
+    int64_t s1=cs->backbuffer[2]<<16;
+    int64_t s2=cs->backbuffer[1]<<16;
+    int64_t s3=cs->backbuffer[0]<<16;
+    int64_t m0= (int64_t)(((s1-s0)*(1+bias)*(1-tension)/2));
+    m0+=        (int64_t)(((s2-s1)*(1-bias)*(1-tension)/2));
+    int64_t m1 =(int64_t)(((s2-s1)*(1+bias)*(1-tension)/2));
+    m1+=        (int64_t)(((s3-s2)*(1-bias)*(1-tension)/2));
+    int64_t a0= 2*mu3-3*mu2+0x10000;
+    int64_t a1=   mu3-2*mu2+mu;
+    int64_t a2=   mu3-  mu2;
+    int64_t a3=-2*mu3+3*mu2;
+    return (((a0*s1 + a1*m0 + a2*m1 + a3*s2)>>16)*volume)>>(16+6);
+
+  }
+
+#endif
 }
 
 
 static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
 {
-  int32_t l,r,x;
+  int32_t l,r;
   int32_t j;
   chan_state_t* cs;
   for(j=0;j<nsmps;j++)
@@ -1231,8 +1305,6 @@ static void mod_produce_samples(mod_context_t* mc,int16_t* obuf,uint32_t nsmps)
       r+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
       cs=&mc->cstates[3];
       l+=chan_produce_sample(mc,cs,&mc->sdescs[cs->sample-1]);
-      //l*=2;
-      //r*=2;
       (*obuf++)=(l+r/2);
       (*obuf++)=(r+l/2);
     }
@@ -1287,6 +1359,7 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
   //printf("[S%02x P%3x F%3x]",sample,period,fx);
 
   cs->modperiod=0x10000;
+  cs->arpmod=0x10000;
 
   if(period)
     {
@@ -1320,6 +1393,7 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
     {
       // note on ie restart sample if sample or period is set
       cs->position=2;
+      cs->lastposition=0;
       cs->fraction=0;
     }
 
@@ -1331,9 +1405,6 @@ static int32_t chan_process_div(chan_state_t* cs,uint8_t* playhead,mod_context_t
 
 static void chan_process_tick(chan_state_t* cs, mod_context_t* mc)
 {
-  // per tick command processing
-  cs->lastvolume=cs->volume;
-  cs->rampvolume=64;
   fx_ontick(mc, cs);
 }
 
@@ -1357,6 +1428,17 @@ static void mod_tick_channels(mod_context_t* mc)
   uint32_t i;
   for(i=0;i<mc->channels;i++)
     chan_process_tick(&mc->cstates[i],mc);      
+}
+
+static void mod_rampvolumes(mod_context_t* mc)
+{
+  // per tick command processing
+  uint32_t i;
+  for(i=0;i<mc->channels;i++)
+    {
+      mc->cstates[i].lastvolume=mc->cstates[i].volume;
+      mc->cstates[i].rampvolume=64;
+    }
 }
 
 static void mod_reset(mod_context_t* mc)
@@ -1383,6 +1465,8 @@ static void __attribute__((unused)) chan_tick(chan_state_t* cs)
 static void mod_tick(mod_context_t* mc)
 {
   mc->tick++;
+
+  mod_rampvolumes(mc);
 
   if(mc->tick>=mc->ticksperdivision)
     {

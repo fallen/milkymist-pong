@@ -25,20 +25,24 @@
 
 
 
-#include <stdint.h>
-
-
-
 /* int types */
 
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
+typedef unsigned long long uint64_t;
 
-#if 0
+#if !defined(_INT8_T)
 typedef /* signed */ char int8_t;
+#endif
+#if !defined(_INT16_T)
 typedef /* signed */ short int16_t;
+#endif
+#if !defined(_INT32_T)
 typedef /* signed */ int int32_t;
+#endif
+#if !defined(_INT64_T)
+typedef /* signed */ long long int64_t;
 #endif
 
 
@@ -84,6 +88,7 @@ struct chan_state
   /* arpeggio effect */
   uint32_t arpindex;
   uint32_t arpnotes[3];
+  uint32_t arpmod;
 
   /* vibrato effect */
   unsigned int viboffset;
@@ -92,12 +97,16 @@ struct chan_state
   unsigned int vibretrig;
   const int* vibtable;
 
+  uint32_t lastposition; // last sample offset (the 32.0 of 32.16)
   uint32_t position;     // sample offset (the 32.0 of 32.16)
   uint32_t fraction;     // fraction (the 0.16 of 32.16, 32-bits to make it simple with overflow)
   uint32_t samplestep;   // 16.16 to add to position.fraction for each step of sample
 
   int32_t rampvolume;
   int32_t lastvolume;
+
+  int32_t rampsample;
+  int32_t lastsample;
 
   int32_t backbuffer[4];
   
