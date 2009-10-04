@@ -21,15 +21,8 @@
 #include "snd.h"
 #include "tmu.h"
 #include "pfpu.h"
-#include "intro.h"
-
-#include "demo_1.h"
+#include "music.h"
 #include "sprites.h"
-#include "transition.h"
-
-#include "badclouds.png.h"
-#include "badfactory.png.h"
-
 static void banner()
 {
     putsnonl("\n\n\e[1m     |\\  /|'||      |\\  /|'   |\n"
