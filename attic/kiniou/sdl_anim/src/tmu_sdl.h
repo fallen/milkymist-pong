@@ -20,7 +20,19 @@
 
 #ifndef __SDLSDK__
 #include <hw/tmu.h>
+#else
+
+#define TMU_MESH_MAXSIZE 128
+#define  TMU_CTL_CHROMAKEY 0
+
 #endif
+
+
+struct tmu_vertex {
+    int y;
+    int x;
+};
+
 
 struct tmu_td;
 
@@ -47,7 +59,7 @@ struct tmu_td {
 };
 
 void tmu_init();
-void tmu_isr();
+void tmu_isr(struct tmu_td *td);
 int tmu_submit_task(struct tmu_td *td);
 
 #endif /* __TMU_H */

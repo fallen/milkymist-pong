@@ -1,63 +1,68 @@
+/*
+ * Milkymist Democompo
+ * Copyright (C) 2007, 2008, 2009 Sebastien Bourdeauducq
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifdef __SDLSDK__ //We are debugging on a computer :)
-
 #include "sdl_config.h"
-#else // We are debugging on MilkyMist
-
+#else
 #include "mm_config.h"
-
 #endif
 
 
+#include "intro.h"
+#include "demo_1.h"
+#include "music.h"
+#include "sprites.h"
+#include "transition.h"
+#include "angle.h"
 
-int main() {
 
-#ifndef __SDLSDK__
-    irq_setmask(0);
-    irq_enable(1);
-    uart_async_init();
+
+int main()
+{
+#ifndef __SDLSDK__ //We are debugging on a computer :)
+	irq_setmask(0);
+	irq_enable(1);
+	uart_async_init();
+	uart_force_sync(1);
+	banner();
+	brd_init();
+	time_init();
+	mem_init();
+	vga_init();
+	snd_init();
+	tmu_init();
+	pfpu_init();
+    music_start();
+#else //__SDLSDK__
     banner();
-    brd_init();
-    time_init();
-    mem_init();
-#endif
     vga_init();
-#ifndef __SDLSDK__
-    snd_init();
     tmu_init();
-    pfpu_init();
-#endif
+    music_start();
+#endif //__SDLSDK__
+//    init_angles();
 
-    //Initialization
-    sprites_init();
-
-    sprites_load(badclouds_raw,badclouds_raw_len,0xFFFF,138,100,4);
-    debug_sprite(&sprite_data[0]);
-
-
-    int quit = 0;
-    unsigned int x , y ;
-
-    unsigned short int * vga_position;
-
-    while(quit == 0)
-    {
-        quit = scan_keys();
-        x = 50;
-
-        for (y=0;y<sprite_data[0].size_vres;y++)
-        {
-            vga_position = &(vga_frontbuffer[x + y * vga_hres]);
-            memcpy(vga_position, &sprite_data[0].data[y * sprite_data[0].size_hres ] , sprite_data[0].size_hres * sizeof(unsigned short int) );
-        }
-        vga_swap_buffers();
-        demo_sleep(100);
-    }
-
-    demo_quit();
-    return 0;
+	while(1) {
+		intro_csv();
+        //demo_1();
+        demo_2(); 
+#ifndef __SDLSDK__ //We are debugging on a computer :)
+		while(!(CSR_GPIO_IN & GPIO_DIP3));
+#endif //__SDLSDK__
+	}
+	
+	return 0;
 }
-
-
-
-

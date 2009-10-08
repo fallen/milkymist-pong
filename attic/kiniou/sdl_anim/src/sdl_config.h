@@ -3,15 +3,12 @@
 
 #include <SDL/SDL.h>
 #include <stdio.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/glext.h>
 
-#include "vga.h"
-#include "tmu.h"
-
-#include "demo_1.h"
-#include "sprites.h"
-#include "transition.h"
-
-#include "badclouds.png.h"
+#include "vga_sdl.h"
+#include "tmu_sdl.h"
 
 static SDL_Event event;
 
@@ -30,6 +27,9 @@ int scan_keys() {
         while ( SDL_PollEvent(&event) )
         {
             switch( event.type ){
+                case SDL_QUIT:
+                    return 1;
+                    break;
                 case SDL_KEYDOWN:
                     printf( "Key press detected\n" );
                     switch( event.key.keysym.sym ){

@@ -44,7 +44,7 @@ void music_start()
 	int r;
 
 	cffat_init();
-	cffat_load("3.MOD", modfile, sizeof(modfile), &size);
+	cffat_load("ALBAN.MOD", modfile, sizeof(modfile), &size);
 	cffat_done();
 
 	r = mod_init(&mod_context, modfile, size);

@@ -10,7 +10,8 @@ RANLIB=ranlib
 
 #Toolchain options
 MACRO=-D__SDLSDK__
-INCLUDES=
+INCLUDES=-I/usr/include/SDL
 ASFLAGS=$(INCLUDES)
-CFLAGS=-Wall -O3 -fomit-frame-pointer -fno-builtin -fsigned-char -fsingle-precision-constant $(INCLUDES) $(MACRO)
-LDFLAGS=-lSDL -lGL -lGLU
+#CFLAGS=-Wall -O3 -fomit-frame-pointer -fno-builtin -fsigned-char -fsingle-precision-constant $(INCLUDES) $(MACRO)
+CFLAGS=-Wall $(INCLUDES) $(MACRO)
+LDFLAGS=-lGL -lGLU -L/usr/lib -lSDL
