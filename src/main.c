@@ -15,7 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <libc.h>
+#include <stdio.h>
 #include <console.h>
 #include <uart.h>
 #include <cffat.h>
@@ -27,15 +27,17 @@
 #include <hw/gpio.h>
 #include <hw/interrupts.h>
 
-#include "brd.h"
-#include "mem.h"
-#include "time.h"
-#include "vga.h"
-#include "snd.h"
-#include "tmu.h"
-#include "pfpu.h"
-#include "intro.h"
+#include <hal/brd.h>
+#include <hal/mem.h>
+#include <hal/time.h>
+#include <hal/vga.h>
+#include <hal/snd.h>
+#include <hal/tmu.h>
+#include <hal/pfpu.h>
+
 #include "music.h"
+#include "intro.h"
+#include "test1.h"
 
 static void banner()
 {
@@ -43,7 +45,7 @@ static void banner()
 			  "     | \\/ ||||_/\\  /| \\/ ||(~~|~\n"
 			  "     |    |||| \\ \\/ |    ||_) |\n"
 			  "                _/\n"
-			  "\e[0m           MAIN#4 DemoCompo\n\n\n");
+			  "\e[0m           Sanobot DemoCompo\n\n\n");
 }
 
 int main()
@@ -64,6 +66,7 @@ int main()
 	music_start();
 	while(1) {
 		intro_csv();
+		test1();
 		while(!(CSR_GPIO_IN & GPIO_DIP3));
 	}
 	

@@ -37,7 +37,7 @@ int main(int ac, char** av)
   pcm_buf_t* pcm_buf = NULL;
   mod_context_t mc;
 
-  if (file_open(&fc, ac > 1 ? av[1] : "../data/3.mod") == -1)
+  if (file_open(&fc, ac > 1 ? av[1] : "../data/alban.mod") == -1)
     {
       printf("failed opening file\n");
       goto on_error;
