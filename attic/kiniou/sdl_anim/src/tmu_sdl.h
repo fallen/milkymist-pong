@@ -15,8 +15,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __TMU_H
-#define __TMU_H
+#ifndef __TMU_SDL_H
+#define __TMU_SDL_H
 
 #ifndef __SDLSDK__
 #include <hw/tmu.h>
@@ -24,7 +24,6 @@
 
 #define TMU_MESH_MAXSIZE 128
 #define  TMU_CTL_CHROMAKEY 0
-
 #endif
 
 

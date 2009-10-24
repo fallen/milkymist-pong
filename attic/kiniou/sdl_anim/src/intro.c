@@ -15,8 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __SDLSDK__
 #include <libc.h>
 #include <system.h>
+#else
+#include <stdlib.h>
+#endif
 
 #include "vga.h"
 #include "text.h"

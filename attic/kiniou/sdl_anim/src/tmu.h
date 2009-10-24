@@ -20,8 +20,11 @@
 
 #ifndef __SDLSDK__
 #include <hw/tmu.h>
+#else
+#include "tmu_sdl.h"
 #endif
 
+#if 0
 struct tmu_td;
 
 typedef void (*tmu_callback)(struct tmu_td *);
@@ -49,5 +52,7 @@ struct tmu_td {
 void tmu_init();
 void tmu_isr();
 int tmu_submit_task(struct tmu_td *td);
+
+#endif
 
 #endif /* __TMU_H */

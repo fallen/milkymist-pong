@@ -1,10 +1,11 @@
 SDL_DEBUG?=0
-MMDIR?=../../milkymist/milkymist-core
+MMDIR?=../../../../../milkymist/
+#milkymist-core
 SERIALPORT?=/dev/ttyUSB0
 
 ifeq ($(strip $(SDL_DEBUG)),1)
 include ./makefile-sdl
-OBJECTS=main.o vga_sdl.o sprites.o key.o transition.o tmu_sdl.o intro.o demo_1.o demo_2.o 
+OBJECTS=main.o vga_sdl.o sprites.o key.o transition.o tmu_sdl.o intro.o demo_1.o demo_2.o angle.o text.o fontmb.o test1.o
 else
 include $(MMDIR)/software/include.mak
 #OBJECTS=crt0.o main.o vga.o sprites.o demo_1.o key.o transition.o 
@@ -17,7 +18,7 @@ DATA_H=$(addsuffix .h, $(DATA) )
 SEGMENTS=-j .text -j .data -j .rodata
 
 
-MKRAW:=$(MMDIR)/tools/makeraw
+MKRAW:=$(MMDIR)/milkymist-core/tools/makeraw
 
 all: boot.bin
 
@@ -46,6 +47,12 @@ endif
 
 depend: $(DATA_H)
 	makedepend -Y -- $(CFLAGS) -- *.c *.h
+
+run:
+	./boot.bin 
+
+stop:
+	killall -9 boot.bin
 
 clean:
 #	@echo "DATA_RAW = $(DATA_RAW)"

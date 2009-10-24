@@ -11,7 +11,7 @@
 #define TMU_TASKQ_SIZE 4 /* < must be a power of 2 */
 #define TMU_TASKQ_MASK (TMU_TASKQ_SIZE-1)
 
-#define index(x,y) x + (y * TMU_MESH_MAXSIZE)
+#define index(x,y) (x) + ((y) * TMU_MESH_MAXSIZE)
 
 
 static struct tmu_td *queue[TMU_TASKQ_SIZE];
@@ -73,16 +73,28 @@ void tmu_isr(struct tmu_td *td)
         glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, shader_num);
     }
 
-    glBegin(GL_TRIANGLE_STRIP);
+    //#define TEST_TRIANGLE_STRIPS
+#ifdef TEST_TRIANGLE_STRIPS
+    glDisable(GL_TEXTURE_2D);
+#endif
 
-    for (hmesh_idx=0; hmesh_idx<=td->hmeshlast;hmesh_idx++)
-    {
-        for (vmesh_idx=0; vmesh_idx<=td->vmeshlast;vmesh_idx++)
-        {
+    for (vmesh_idx=0; vmesh_idx<=td->vmeshlast-1;vmesh_idx++)
+      {
+	glBegin(GL_TRIANGLE_STRIP);
+	for (hmesh_idx=0; hmesh_idx<=td->hmeshlast;hmesh_idx++)
+	  {
+#ifdef TEST_TRIANGLE_STRIPS
+	    // Testing strip rendering, alternating green/red 
+	    if((vmesh_idx^hmesh_idx)&1) glColor3f(1.0,0.0,0);
+	    else glColor3f(0.0,1.0,0);
+#endif
+            //printf("POUET %d %d : %d %d\n" , hmesh_idx, vmesh_idx ,dstmesh[index(hmesh_idx,vmesh_idx)].x , dstmesh[index(hmesh_idx,vmesh_idx)].y);
             glTexCoord2f((float) (srcmesh[index(hmesh_idx,vmesh_idx)].x)/1024.0 , (float) (srcmesh[index(hmesh_idx,vmesh_idx)].y)/512.0 );
-//            printf("POUET %d %d : %d %d\n" , hmesh_idx, vmesh_idx ,dstmesh[index(hmesh_idx,vmesh_idx)].x , dstmesh[index(hmesh_idx,vmesh_idx)].y);
-            glVertex2i( dstmesh[index(hmesh_idx,vmesh_idx)].x , dstmesh[index(hmesh_idx,vmesh_idx)].y);
+            glVertex2i( dstmesh[index(hmesh_idx,vmesh_idx)].x ,   dstmesh[index(hmesh_idx,vmesh_idx)].y);
+            glTexCoord2f((float) (srcmesh[index(hmesh_idx,vmesh_idx+1)].x)/1024.0 , (float) (srcmesh[index(hmesh_idx,vmesh_idx+1)].y)/512.0 );
+            glVertex2i( dstmesh[index(hmesh_idx,vmesh_idx+1)].x , dstmesh[index(hmesh_idx,vmesh_idx+1)].y);
         }
+	glEnd();
     }
 
 

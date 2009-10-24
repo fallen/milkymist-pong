@@ -1,5 +1,11 @@
 #include "demo_1.h"
+
+#ifndef __SDLSDK__
+#include <libc.h>
 #include <system.h>
+#else
+#include <stdlib.h>
+#endif
 
 #include "tmu.h"
 #include "vga.h"

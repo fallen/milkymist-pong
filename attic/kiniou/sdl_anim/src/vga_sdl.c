@@ -44,22 +44,22 @@ MUL c_out , dot , c_orig;\
 END\
 ";
 
-char program_string[] = 
-"!!ARBfp1.0\n"
-"ATTRIB tex = fragment.texcoord[0]; \n"
-"PARAM key = {1.0,0.0,1.0,1.0}; \n"
-"PARAM c_transparent = {0.0,0.0,0.0,0.0}; \n"
-"OUTPUT c_out = result.color; \n"
-
-"TEMP c_orig , c_add, dot; \n"
-
-"TEX c_orig , tex , texture[0] , 2D; \n"
-"SUB c_add, key , c_orig;\n"
-"DP3 dot , c_add , key;\n"
-"MUL c_out , dot , c_orig;\n"
-
-"END\n"
-;
+char program_string[] = "\
+!!ARBfp1.0\
+ATTRIB tex = fragment.texcoord[0]; \
+PARAM key = {1.0,0.0,1.0,1.0}; \
+PARAM c_transparent = {0.0,0.0,0.0,0.0}; \
+OUTPUT c_out = result.color; \
+\
+TEMP c_orig , c_add, dot; \
+\
+TEX c_orig , tex , texture[0] , 2D; \
+SUB c_add, key , c_orig;\
+DP3 dot , c_add , key;\
+MUL c_out , dot , c_orig;\
+\
+END\
+";
 
 /* gets next power of two */
 static int pot(int x) {
@@ -94,9 +94,10 @@ static void initGL()
 
     glDepthFunc (GL_LEQUAL);                                    /* The Type Of Depth Test To Do */
     glEnable (GL_DEPTH_TEST);                                 /* Enable Depth Testing */
+    glDisable (GL_DEPTH_TEST);                                 /* Enable Depth Testing */
    // glEnable(GL_ALPHA_TEST);
 
-    glShadeModel (GL_SMOOTH);                                 /* Enables Smooth Color Shading */
+    glShadeModel (GL_FLAT);                                 /* Enables Smooth Color Shading */
     glDisable (GL_LINE_SMOOTH);                               /* Initially Disable Line Smoothing */
 
     //glEnable(GL_COLOR_MATERIAL);                            /* Enable Color Material (Allows Us To Tint Textures) */

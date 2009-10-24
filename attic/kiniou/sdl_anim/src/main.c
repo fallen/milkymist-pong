@@ -24,6 +24,7 @@
 
 #include "intro.h"
 #include "demo_1.h"
+#include "test1.h"
 #include "music.h"
 #include "sprites.h"
 #include "transition.h"
@@ -51,11 +52,12 @@ int main()
     banner();
     vga_init();
     tmu_init();
-    music_start();
+    //music_start();
 #endif //__SDLSDK__
-//    init_angles();
+    //    init_angles();
 
 	while(1) {
+	  test1();
 		intro_csv();
         //demo_1();
         demo_2(); 

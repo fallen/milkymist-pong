@@ -5,7 +5,12 @@
 #include "mm_config.h"
 #endif
 */
+#ifndef __SDLSDK__
+#include <libc.h>
 #include <system.h>
+#else
+#include <stdlib.h>
+#endif
 
 #include "tmu.h"
 #include "vga.h"
