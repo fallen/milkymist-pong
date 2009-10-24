@@ -1,5 +1,3 @@
-#!/usr/bin/env sh
+#!/bin/bash
 
-# input file must have the .s16 extension
-
-sox -L -r 48000 -t raw -s -2 -c 2 $1 ${1/\.s16/.wav}
+sox -L -r 48000 -t raw -s -2 -c 2 output.s16 output.wav

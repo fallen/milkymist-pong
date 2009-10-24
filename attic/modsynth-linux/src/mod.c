@@ -1201,7 +1201,7 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
   // Floor
   return (cs->backbuffer[0]*volume)>>6;
 #endif
-#if 0
+#if 1
   {
     // Linear interpolation
     int s0,s1;
@@ -1243,7 +1243,7 @@ static int inline chan_produce_sample(mod_context_t* mc,chan_state_t* cs,const s
 	    * volume) >>(16+6); 
   }
 #endif
-#if 1
+#if 0
   {
     // cubic 2
     int64_t mu2=(cs->fraction*cs->fraction)>>16;
