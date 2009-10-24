@@ -15,7 +15,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "vga.h"
+#include <hal/vga.h>
+
 #include "fontmb.h"
 #include "text.h"
 

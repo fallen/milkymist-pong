@@ -15,11 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <libc.h>
-#include <console.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <cffat.h>
 
-#include "snd.h"
+#include <hal/snd.h>
+
 #include "mod.h"
 #include "music.h"
 
@@ -44,7 +45,10 @@ void music_start()
 	int r;
 
 	cffat_init();
-	cffat_load("3.MOD", modfile, sizeof(modfile), &size);
+	if(!cffat_load("ALBAN.MOD", modfile, sizeof(modfile), &size)) {
+		cffat_done();
+		return;
+	}
 	cffat_done();
 
 	r = mod_init(&mod_context, modfile, size);
@@ -56,4 +60,5 @@ void music_start()
 	snd_play_refill(sndbuf2);
 	snd_play_refill(sndbuf3);
 	snd_play_start(callback, NSAMPLES, NULL);
+	printf("MOD player started\n");
 }

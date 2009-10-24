@@ -19,10 +19,10 @@
 #include <irq.h>
 #include <uart.h>
 
-#include "time.h"
-#include "snd.h"
-#include "tmu.h"
-#include "pfpu.h"
+#include <hal/time.h>
+#include <hal/snd.h>
+#include <hal/tmu.h>
+#include <hal/pfpu.h>
 
 void isr()
 {

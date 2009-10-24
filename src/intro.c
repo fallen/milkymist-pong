@@ -15,12 +15,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <libc.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <system.h>
 
-#include "vga.h"
+#include <hal/vga.h>
+#include <hal/tmu.h>
+
 #include "text.h"
-#include "tmu.h"
 #include "color.h"
 #include "intro.h"
 
