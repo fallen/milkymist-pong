@@ -12,13 +12,13 @@
 #include "noarm.h"
 
 #define NOARM_W 640
-#define NOARM_H 200
+#define NOARM_H 230
 
 #define CHROMAKEY  0xf81f
 #define HMESHLAST  64
 #define VMESHLAST  48
 
-#define DURATION 700
+#define DURATION 630
 
 static int frames;
 
