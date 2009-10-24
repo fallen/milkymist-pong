@@ -37,7 +37,7 @@
 
 #include "music.h"
 #include "intro.h"
-#include "test1.h"
+#include "plasma.h"
 
 static void banner()
 {
