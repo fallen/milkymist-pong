@@ -63,9 +63,9 @@ int main()
 	tmu_init();
 	pfpu_init();
 
-	music_start();
+	//music_start();
 	while(1) {
-		intro_csv();
+		//intro_csv();
 		test1();
 		while(!(CSR_GPIO_IN & GPIO_DIP3));
 	}

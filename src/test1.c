@@ -20,53 +20,75 @@ static volatile int tmu_wait;
 
 static void tmu_complete(struct tmu_td *td)
 {
-    tmu_wait = 1;
+	tmu_wait = 1;
 }
 
 static unsigned short ramp[256*256];
 
-
 static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_vertices, int frame)
 {
 	int x, y;
-	int px, py;
+	int px, py, pz, pw;
 	int cx, cy;
 
-	int xscalex=15;
-	int xspeedx=1;
-	int xscaley=13;
-	int xspeedy=9;
-	int xscalez=10;
-	int xspeedz=7;
-	int xscalew=10;
-	int xspeedw=9;
-	int yscalex=3;
-	int yspeedx=13;
-	int yscaley=5;
-	int yspeedy=10;
-	int yscalez=5;
-	int yspeedz=4;
-	int yscalew=10;
-	int yspeedw=4;
+	static int xposx=0;
+	int xscalex=153*2;
+	int xspeedx=215;
+	static int xposy=0;
+	int xscaley=132*2;
+	int xspeedy=195;
+	static int xposz=0;
+	int xscalez=101;
+	int xspeedz=175;
+	static int xposw=0;
+	int xscalew=103;
+	int xspeedw=124;
+
+	static int yposx=0;
+	int yscalex=233*2;
+	int yspeedx=134;
+	static int yposy=0;
+	int yscaley=215*2;
+	int yspeedy=176;
+	static int yposz=0;
+	int yscalez=195;
+	int yspeedz=146;
+	static int yposw=0;
+	int yscalew=190;
+	int yspeedw=184;
+
+	xposx+=xspeedx;
+	xposy+=xspeedy;
+	xposz+=xspeedz;
+	xposw+=xspeedw;
+
+	yposx+=yspeedx;
+	yposy+=yspeedy;
+	yposz+=yspeedz;
+	yposw+=yspeedw;
 
 	cx = vga_hres;
 	cy = vga_vres;
 	for(y=0;y<=VMESHLAST;y++)
 		for(x=0;x<=HMESHLAST;x++) {
-		  px=50; //(1500+COS[(x*xscalez+frame*xspeedz)%360])/20;
-		  py=50; //(1500+COS[(x*yscalez+frame*yspeedz)%360])/20;
-		  cx=50; //(1500+COS[(x*xscalew+frame*xspeedw)%360])/20;
-		  cy=50; //(1500+COS[(x*yscalew+frame*yspeedw)%360])/20;
-		  src_vertices[TMU_MESH_MAXSIZE*y+x].x = 
-		    (2000+
-		     COS[((x*xscalex+xspeedx*px/50)*frame/20)%360]+
-		     COS[((y*xscaley+xspeedy*cx/50)*frame/20)%360])>>4;
-		  src_vertices[TMU_MESH_MAXSIZE*y+x].y = 
-		    (2000+
-		     COS[((x*yscalex+yspeedx*px/50)*frame/20)%360]+
-		     COS[((y*yscaley+yspeedy*cx/50)*frame/20)%360])>>4;
-		  dst_vertices[TMU_MESH_MAXSIZE*y+x].x = x*vga_hres/HMESHLAST;
-		  dst_vertices[TMU_MESH_MAXSIZE*y+x].y = y*vga_vres/VMESHLAST;
+			px=2000+COS[((x*xscalez+xposz)>>5)%360];
+			py=2000+COS[((x*yscalez+yposz)>>5)%360];
+			pw=2000+COS[((x*xscalew+xposw)>>5)%360];
+			pz=2000+COS[((x*yscalew+yposw)>>5)%360];
+			src_vertices[TMU_MESH_MAXSIZE*y+x].x =
+				(4000
+				+COS[(((x*xscalex*px>>10)+xposx)>>5)%360]
+				+COS[(((y*xscaley)+xposy)>>5)%360]
+				+COS[(((y*yscaley*py>>10)+yposy)>>5)%360]
+				+COS[(((x*yscalex)+yposx)>>5)%360]
+				)>>5;
+			src_vertices[TMU_MESH_MAXSIZE*y+x].y =
+				(4000
+				+COS[(((x*xscalew*pw>>10)+xposw)>>5)%360]
+				+COS[(((y*yscalez*pz>>10)+yposz)>>5)%360]
+				)>>5;
+			dst_vertices[TMU_MESH_MAXSIZE*y+x].x = x*vga_hres/HMESHLAST;
+			dst_vertices[TMU_MESH_MAXSIZE*y+x].y = y*vga_vres/VMESHLAST;
 		}
 }
 
@@ -80,14 +102,12 @@ void test1()
 	static struct tmu_vertex src_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
 	static struct tmu_vertex dst_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
 	
-	frames=0;
+	frames = 0;
 
 	for(i=0;i<256*256;i++)
-	  {
-	    ramp[i]=MAKERGB565N(i>>8,i,0);
-//	    ramp[i]=(ramp[i]<<8)+(ramp[i]>>8);
-	  }
+	    ramp[i]=MAKERGB565N(((~i&0xff)*(~i>>8))>>8,((i&0xff)*(~i>>8))>>8,~i);
 
+	flush_bridge_cache();
 
 	tmu_task.flags = 0;
 	tmu_task.hmeshlast = HMESHLAST;
@@ -106,23 +126,15 @@ void test1()
 
 	make_mesh(&src_vertices[0][0], &dst_vertices[0][0], 100000);
 
-
-
 	sn = 0;
 	for(i=0;i<DURATION;i++) {
-	  tmu_task.srcfbuf = ramp;
-	  tmu_task.dstfbuf = vga_backbuffer;
-
-	  make_mesh(&src_vertices[0][0], &dst_vertices[0][0], frames);
-
-	  tmu_wait = 0;
-	  tmu_submit_task(&tmu_task);
-	  while(!tmu_wait);
-	  
-	  flush_bridge_cache();
-		
-	  vga_swap_buffers();
-	  frames+=1;
+		tmu_task.srcfbuf = ramp;
+		tmu_task.dstfbuf = vga_backbuffer;
+		make_mesh(&src_vertices[0][0], &dst_vertices[0][0], frames);
+		tmu_wait = 0;
+		tmu_submit_task(&tmu_task);
+		while(!tmu_wait);
+		vga_swap_buffers();
+		frames++;
 	}
-
 }
