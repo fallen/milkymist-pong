@@ -36,7 +36,7 @@ static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_ve
 	int x, y;
 	int px, py, pz, pw;
 	int cx, cy;
-
+	
 	static int xposx=0;
 	int xscalex=153*2;
 	int xspeedx=215;
@@ -62,6 +62,7 @@ static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_ve
 	static int yposw=0;
 	int yscalew=190;
 	int yspeedw=184;
+
 
 	xposx+=xspeedx;
 	xposy+=xspeedy;
@@ -136,20 +137,21 @@ void noarm(int dx, int dy, int bright)
 	tmu_submit_task(&tmu_task);
 }
 
-void test1()
+int i;
+int bright;
+int brightdir;
+/* define those as static, or the compiler optimizes the stack a bit too much */
+static struct tmu_td tmu_task;
+static struct tmu_vertex src_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
+static struct tmu_vertex dst_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
+
+void init_plasma()
 {
-	int i;
-	int bright;
-	int brightdir;
-	/* define those as static, or the compiler optimizes the stack a bit too much */
-	static struct tmu_td tmu_task;
-	static struct tmu_vertex src_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
-	static struct tmu_vertex dst_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
 	
 	frames = 0;
 
 	for(i=0;i<256*256;i++)
-	    ramp[i]=MAKERGB565N(((~i&0xff)*(~i>>8))>>8,((i&0xff)*(~i>>8))>>8,~i);
+	  ramp[i]=MAKERGB565N(0, ((~i&0xff)*(~i>>8))>>8, 0);//((~i&0xff)*(~i>>8))>>8,((i&0xff)*(~i>>8))>>8,~i);
 
 	flush_bridge_cache();
 
@@ -165,17 +167,20 @@ void test1()
 	tmu_task.dsthres = vga_hres;
 	tmu_task.dstvres = vga_vres;
 	tmu_task.profile = 0;
-	tmu_task.callback = NULL;
+	tmu_task.callback = tmu_complete;
 	tmu_task.user = NULL;
 
 	make_mesh(&src_vertices[0][0], &dst_vertices[0][0], 100000);
 
 	brightdir = 1;
 	bright = 0;
-	for(i=0;i<DURATION;i++) {
+}
+
+void update_plasma(int x, int y) {
+  //printf("%i %i\n", x, y);
 		tmu_task.srcfbuf = ramp;
 		tmu_task.dstfbuf = vga_backbuffer;
-		make_mesh(&src_vertices[0][0], &dst_vertices[0][0], frames);
+		make_mesh(&src_vertices[0][0], &dst_vertices[0][0], x);
 		tmu_submit_task(&tmu_task);
 		tmu_wait = 0;
 		if(brightdir) {
@@ -185,10 +190,9 @@ void test1()
 			bright--;
 			if(bright == 0) brightdir = 1;
 		}
-		noarm(0, (480-NOARM_H)/2, bright);
+		//noarm(0, (480-NOARM_H)/2, bright);
 		while(!tmu_wait);
-		flush_bridge_cache();
-		vga_swap_buffers();
+		//flush_bridge_cache();
+		//vga_swap_buffers();
 		frames++;
-	}
 }
