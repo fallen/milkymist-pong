@@ -7,14 +7,6 @@ SEGMENTS=-j .text -j .data -j .rodata
 
 all: boot.bin
 
-plasma.c: noarm.h
-
-noarm.raw: noarm.png
-	$(MMDIR)/tools/makeraw noarm.png
-
-noarm.h: noarm.raw
-	xxd -i noarm.raw noarm.h
-
 %.bin: %.elf
 	$(OBJCOPY) $(SEGMENTS) -O binary $< $@
 	chmod -x $@

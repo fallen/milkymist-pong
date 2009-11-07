@@ -9,14 +9,12 @@
 #include "color.h"
 #include "text.h"
 
-#include "noarm.h"
-
 #define NOARM_W 640
 #define NOARM_H 230
 
 #define CHROMAKEY  0xf81f
-#define HMESHLAST  64
-#define VMESHLAST  48
+#define HMESHLAST  32
+#define VMESHLAST  24
 
 #define DURATION 630
 
@@ -29,7 +27,7 @@ static void tmu_complete(struct tmu_td *td)
 	tmu_wait = 1;
 }
 
-static unsigned short ramp[256*256];
+static unsigned short ramp[64*64];
 
 static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_vertices, int frame)
 {
@@ -38,10 +36,10 @@ static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_ve
 	int cx, cy;
 	
 	static int xposx=0;
-	int xscalex=153*2;
+	int xscalex=153;
 	int xspeedx=215;
 	static int xposy=0;
-	int xscaley=132*2;
+	int xscaley=132;
 	int xspeedy=195;
 	static int xposz=0;
 	int xscalez=101;
@@ -51,10 +49,10 @@ static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_ve
 	int xspeedw=124;
 
 	static int yposx=0;
-	int yscalex=233*2;
+	int yscalex=233;
 	int yspeedx=134;
 	static int yposy=0;
-	int yscaley=215*2;
+	int yscaley=215;
 	int yspeedy=176;
 	static int yposz=0;
 	int yscalez=195;
@@ -88,53 +86,15 @@ static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_ve
 				+COS[(((y*xscaley)+xposy)>>5)%360]
 				+COS[(((y*yscaley*py>>10)+yposy)>>5)%360]
 				+COS[(((x*yscalex)+yposx)>>5)%360]
-				)>>5;
+				)>>7;
 			src_vertices[TMU_MESH_MAXSIZE*y+x].y =
 				(4000
 				+COS[(((x*xscalew*pw>>10)+xposw)>>5)%360]
 				+COS[(((y*yscalez*pz>>10)+yposz)>>5)%360]
-				)>>5;
+				)>>7;
 			dst_vertices[TMU_MESH_MAXSIZE*y+x].x = x*vga_hres/HMESHLAST;
 			dst_vertices[TMU_MESH_MAXSIZE*y+x].y = y*vga_vres/VMESHLAST;
 		}
-}
-
-void noarm(int dx, int dy, int bright)
-{
-	static struct tmu_td tmu_task;
-	static struct tmu_vertex src_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
-	static struct tmu_vertex dst_vertices[TMU_MESH_MAXSIZE][TMU_MESH_MAXSIZE];
-	int x;
-
-	tmu_task.flags = TMU_CTL_CHROMAKEY;
-	tmu_task.hmeshlast = HMESHLAST;
-	tmu_task.vmeshlast = 1;
-	tmu_task.brightness = bright;
-	tmu_task.chromakey = 0xf81f;
-	tmu_task.srcmesh = &src_vertices[0][0];
-	tmu_task.srchres = NOARM_W;
-	tmu_task.srcvres = NOARM_H;
-	tmu_task.dstmesh = &dst_vertices[0][0];
-	tmu_task.dsthres = vga_hres;
-	tmu_task.dstvres = vga_vres;
-	tmu_task.profile = 0;
-	tmu_task.callback = tmu_complete;
-	tmu_task.user = NULL;
-
-	tmu_task.srcfbuf = noarm_raw;
-	tmu_task.dstfbuf = vga_backbuffer;
-	
-	for(x=0;x<=HMESHLAST;x++) {
-		src_vertices[0][x].x = NOARM_W*x/HMESHLAST;
-		src_vertices[0][x].y = 0;
-		src_vertices[1][x].x = NOARM_W*x/HMESHLAST;
-		src_vertices[1][x].y = NOARM_H;
-		dst_vertices[0][x].x = NOARM_W*x/HMESHLAST+dx;
-		dst_vertices[0][x].y = 0+dy;
-		dst_vertices[1][x].x = NOARM_W*x/HMESHLAST+dx;
-		dst_vertices[1][x].y = NOARM_H+dy;
-	}
-	tmu_submit_task(&tmu_task);
 }
 
 int i;
@@ -150,8 +110,9 @@ void init_plasma()
 	
 	frames = 0;
 
-	for(i=0;i<256*256;i++)
-	  ramp[i]=MAKERGB565N(0, ((~i&0xff)*(~i>>8))>>8, 0);//((~i&0xff)*(~i>>8))>>8,((i&0xff)*(~i>>8))>>8,~i);
+	for(i=0;i<64*64;i++)
+	  ramp[i]=MAKERGB565N(0, ((i>>6)+(i&0x3f))>>1, 0);
+
 
 	flush_bridge_cache();
 
@@ -161,8 +122,8 @@ void init_plasma()
 	tmu_task.brightness = 62;
 	tmu_task.chromakey = 0;
 	tmu_task.srcmesh = &src_vertices[0][0];
-	tmu_task.srchres = 256;
-	tmu_task.srcvres = 256;
+	tmu_task.srchres = 64;
+	tmu_task.srcvres = 64;
 	tmu_task.dstmesh = &dst_vertices[0][0];
 	tmu_task.dsthres = vga_hres;
 	tmu_task.dstvres = vga_vres;
