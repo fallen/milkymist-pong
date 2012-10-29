@@ -104,7 +104,7 @@ static void make_mesh(struct tmu_vertex *src_vertices, struct tmu_vertex *dst_ve
 #define DURATION 700
 #define POST 100
 
-void intro_csv()
+void intro_csv(void)
 {
 	int i;
 	int sn;
