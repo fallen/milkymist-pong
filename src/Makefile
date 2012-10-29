@@ -2,7 +2,8 @@ MMDIR?=../../milkymist
 SERIALPORT?=/dev/ttyUSB0
 include $(MMDIR)/software/include.mak
 
-OBJECTS=crt0.o isr.o tick.o main.o plasma.o angle.o
+OBJECTS=crt0.o isr.o tick.o main.o
+#OBJECTS=crt0.o isr.o tick.o main.o plasma.o angle.o
 SEGMENTS=-j .text -j .data -j .rodata
 
 all: boot.bin
@@ -10,7 +11,7 @@ all: boot.bin
 %.bin: %.elf
 	$(OBJCOPY) $(SEGMENTS) -O binary $< $@
 	chmod -x $@
-	$(MMDIR)/tools/crc32 $@
+	$(MMDIR)/tools/mkmmimg $@ write
 
 boot.elf: linker.ld $(OBJECTS)
 	$(LD) $(LDFLAGS) -T linker.ld -N -o $@ -L$(MMDIR)/software/libbase -L$(MMDIR)/software/libmath -L$(MMDIR)/software/libbase -L$(MMDIR)/software/libhal --start-group $(OBJECTS) -lbase -lmath -lhal --end-group
