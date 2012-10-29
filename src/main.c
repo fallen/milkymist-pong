@@ -42,7 +42,7 @@ int main(void)
 {
 	irq_setmask(0);
 	irq_enable(1);
-	uart_async_init();
+//	uart_async_init();
 	uart_force_sync(1);
 	brd_init();
 	time_init();
@@ -87,7 +87,7 @@ int main(void)
 	  //for(j = 0; j < vga_vres*vga_hres; ++j)
 	  //  vga_backbuffer[j] = MAKERGB565(0, 0, 0);
 
-	  update_plasma(x, y);
+//	  update_plasma(x, y);
 
 	  for (w = 0; w < 10; ++w) {
 	    for (h = 0; h < 10; ++h) {
