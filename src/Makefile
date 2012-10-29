@@ -14,7 +14,7 @@ all: boot.bin
 	$(MMDIR)/tools/mkmmimg $@ write
 
 boot.elf: linker.ld $(OBJECTS)
-	$(LD) $(LDFLAGS) -T linker.ld -N -o $@ -L$(MMDIR)/software/libbase -L$(MMDIR)/software/libmath -L$(MMDIR)/software/libbase -L$(MMDIR)/software/libhal --start-group $(OBJECTS) -lbase -lmath -lhal --end-group
+	$(LD) $(LDFLAGS) -T linker.ld -N -o $@ -L$(MMDIR)/software/libbase -L$(MMDIR)/software/libmath -L$(MMDIR)/software/libbase -L$(MMDIR)/software/libhal --start-group $(OBJECTS) -lbase -lhal --end-group
 	chmod -x $@
 
 .PHONY: clean depend load
