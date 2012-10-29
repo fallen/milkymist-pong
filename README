@@ -1,6 +1,12 @@
 [> Milkymist Demo Compo
 -----------------------
 
+EDIT : This is a port of the pong game to Milkymist One board.
+The pong game has originally been written by proppy during a workshop organized by Sébastien Bourdeauducq at /tmp/lab
+(French hackerspace).
+This pong game was designed to run on the ML501 dev board.
+I just ported it to run on the Milkymist One board and to link with latest Milkymist software libraries.
+
 The idea here is to present a compo based on the Milkymist hardware platform
 within a month. It may be a 2D/3D compo (or 2D only) and must be less than 10min
 long.
