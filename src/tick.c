@@ -17,7 +17,7 @@
 
 #include <hal/time.h>
 
-void time_tick()
+void time_tick(void)
 {
 }
 
