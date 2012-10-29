@@ -24,16 +24,14 @@
 #include <hal/tmu.h>
 #include <hal/pfpu.h>
 
-void isr()
+void isr(void)
 {
 	unsigned int irqs;
 
 	irqs = irq_pending() & irq_getmask();
 
-	if(irqs & IRQ_UARTRX)
-		uart_async_isr_rx();
-	if(irqs & IRQ_UARTTX)
-		uart_async_isr_tx();
+	if(irqs & IRQ_UART)
+		uart_async_isr();
 
 	if(irqs & IRQ_TIMER0)
 		time_isr();
