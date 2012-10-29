@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <console.h>
 #include <uart.h>
-#include <cffat.h>
+//#include <cffat.h>
 #include <system.h>
 #include <irq.h>
 #include <board.h>
@@ -36,9 +36,9 @@
 #include <hal/pfpu.h>
 
 #include "color.h"
-#include "plasma.h"
+//#include "plasma.h"
 
-int main()
+int main(void)
 {
 	irq_setmask(0);
 	irq_enable(1);
@@ -47,12 +47,11 @@ int main()
 	brd_init();
 	time_init();
 	mem_init();
-	vga_init();
+	vga_init(0);
 	snd_init();
 	tmu_init();
 	pfpu_init();
 
-	int j = 0;
 	int x = 42;
 	int y = 42;
 	int dx = 3;
@@ -66,38 +65,24 @@ int main()
 	int p1x = 0;
 	int p1y = 0;
 	int p1s = 40;
-	int p2x = vga_hres - 10;
-	int p2y = 0;
-	int p2s = 40;
 
-	init_plasma();
+//	init_plasma();
 	
 	while(1) {
 
 	  input = CSR_GPIO_IN;
-	  if (input & GPIO_PBW) {
+	  if (input & GPIO_BTN1) {
 	    p1y-=5;
 	  }
-	  if (input & GPIO_PBS) {
+	  if (input & GPIO_BTN2) {
 	    p1y+=5;
-	  }
-
-	  if (input & GPIO_PBN) {
-	    p2y-=5;
-	  }
-	  if (input & GPIO_PBE) {
-	    p2y+=5;
 	  }
 
 	  if (p1y < 0)
 	    p1y = 0;
-	  if (p2y < 0)
-	    p2y = 0;
 
 	  if ((p1y + p1s) > 480)
 	    p1y = 480 - p1s;
-	  if ((p2y + p2s) > 480)
-	    p2y = 480 - p2s;
 	  
 	  //for(j = 0; j < vga_vres*vga_hres; ++j)
 	  //  vga_backbuffer[j] = MAKERGB565(0, 0, 0);
@@ -116,12 +101,6 @@ int main()
 	    }
 	  }
 
-	  for (w = 0; w < 10; ++w) {
-	    for (h = 0; h < p2s; ++h) {
-	      vga_backbuffer[(p2y+h)*vga_hres + (p2x+w)] = MAKERGB565(0, 0, 0xff);
-	    }
-	  }
-
 	  flush_bridge_cache();
 
 	  vga_swap_buffers();
@@ -129,19 +108,6 @@ int main()
 	  x+= dx;
 	  y+= dy;
 
-	  if ((x + w) > (vga_hres - 10)) {
-	    if ((y > (p2y - 10)) && (y < (p2y + p2s))) {
-	      x = 620;
-	      dx = -dx;
-	      p2s -= 10;
-	      if (p2s < 10)
-		p2s = 10;
-	    } else {
-	      x = 320;
-	      y = 240;
-	      p2s += 10;
-	    }
-	  }
 	  if (x < 10) {
 	    if ((y > (p1y - 10)) && (y < (p1y + p1s))) {
 	      x = 10;
