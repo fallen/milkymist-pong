@@ -40,18 +40,24 @@
 
 int main(void)
 {
+
+	CSR_DBG_CTRL = DBG_CTRL_GDB_ROM_LOCK;
+	CSR_DBG_CTRL = DBG_CTRL_BUS_ERR_EN;
+
 	irq_setmask(0);
 	irq_enable(1);
 //	uart_async_init();
-	uart_force_sync(1);
+	uart_init();
+	vga_init(0); // Use unblanked for now
 	brd_init();
-	time_init();
-	mem_init();
-	vga_init(0);
-	snd_init();
 	tmu_init();
-	pfpu_init();
+//	time_init();
+//	mem_init();
+//	snd_init();
+//	pfpu_init();
+	vga_unblank();
 
+	int j;
 	int x = 42;
 	int y = 42;
 	int dx = 3;
@@ -84,8 +90,8 @@ int main(void)
 	  if ((p1y + p1s) > 480)
 	    p1y = 480 - p1s;
 	  
-	  //for(j = 0; j < vga_vres*vga_hres; ++j)
-	  //  vga_backbuffer[j] = MAKERGB565(0, 0, 0);
+	  for(j = 0; j < vga_vres*vga_hres; ++j)
+	    vga_backbuffer[j] = MAKERGB565(0, 0, 0);
 
 //	  update_plasma(x, y);
 
@@ -101,7 +107,8 @@ int main(void)
 	    }
 	  }
 
-	  flush_bridge_cache();
+
+//	  flush_bridge_cache();
 
 	  vga_swap_buffers();
 
@@ -119,7 +126,12 @@ int main(void)
 	      x = 320;
 	      y = 240;
 	      p1s += 10;
+	      dx = 3;
 	    }
+	  } else if ((x + w) > (vga_hres - 10) && (dx > 0))
+	  {
+	    x = vga_hres - 10;
+	    dx = -dx;
 	  }
 
 	  if (((y + 10) > vga_vres) || (y < 0)) {
