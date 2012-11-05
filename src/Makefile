@@ -25,5 +25,5 @@ depend:
 clean:
 	rm -f $(OBJECTS) boot.elf boot.bin .*~ *~ Makefile.bak noarm.h noarm.raw
 
-load: boot.bin
-	$(MMDIR)/tools/flterm --port $(SERIALPORT) --kernel boot.bin --kernel-adr 0x40000000
+load: boot.bin flash_bios.data fjmem.bit
+	sudo jtag flash_bios.data
