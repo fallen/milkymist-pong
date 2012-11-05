@@ -28,17 +28,17 @@
 .global     _start
 _start:
 _reset_handler:
-	xor     r0, r0, r0
-	wcsr    IE, r0
-	mvhi    r1, hi(_reset_handler)
-	ori     r1, r1, lo(_reset_handler)
-	wcsr    EBA, r1
-	calli   _crt0
-	nop
-	nop
+	xor	r0, r0, r0
+	wcsr	IE, r0
+	mvhi	r1, hi(_reset_handler)
+	ori	r1, r1, lo(_reset_handler)
+	wcsr	EBA, r1
+	calli	_sdram_init
+	xor	r2, r2, r2
+	bi	_crt0
 
 _breakpoint_handler:
-	nop
+	bi _breakpoint_handler
 	nop
 	nop
 	nop
@@ -48,7 +48,7 @@ _breakpoint_handler:
 	nop
 
 _instruction_bus_error_handler:
-	nop
+	bi _instruction_bus_error_handler
 	nop
 	nop
 	nop
@@ -57,8 +57,8 @@ _instruction_bus_error_handler:
 	nop
 	nop
 
-_watchpoint_handler:
-	nop
+_watchpoint_hander:
+	bi _watchpoint_hander
 	nop
 	nop
 	nop
@@ -68,7 +68,7 @@ _watchpoint_handler:
 	nop
 
 _data_bus_error_handler:
-	nop
+	bi _data_bus_error_handler
 	nop
 	nop
 	nop
@@ -78,7 +78,7 @@ _data_bus_error_handler:
 	nop
 
 _divide_by_zero_handler:
-	nop
+	bi _divide_by_zero_handler
 	nop
 	nop
 	nop
@@ -96,6 +96,18 @@ _interrupt_handler:
 	nop
 	nop
 	nop
+
+macaddress:
+	.byte 0x10
+	.byte 0xe2
+	.byte 0xd5
+	.byte 0x00
+	.byte 0x00
+	.byte 0x00
+
+	/* padding to align to a 32-bit boundary */
+	.byte 0x00
+	.byte 0x00
 
 _crt0:
 	/* Setup stack and global pointer */
@@ -116,10 +128,10 @@ _crt0:
 	bi      .clearBSS
 
 .callMain:
-	mvi     r1, 0
+	mv      r1, r2
 	mvi     r2, 0
 	mvi     r3, 0
-	calli   main
+	bi      main
 
 .save_all:
 	addi    sp, sp, -56
