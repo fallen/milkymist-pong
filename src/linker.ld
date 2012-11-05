@@ -4,9 +4,8 @@ ENTRY(_start)
 __DYNAMIC = 0;
 
 MEMORY {
-	flash : ORIGIN = 0x00000000, LENGTH = 0x800000   /* 8M */
-	sram  : ORIGIN = 0x20000000, LENGTH = 0x1000     /* 4k */
-	sdram : ORIGIN = 0x40000000, LENGTH = 0x4000000  /* 64M */
+	flash : ORIGIN = 0x00860000, LENGTH = 0x20000    /* 128K */
+	sdram : ORIGIN = 0x44000000, LENGTH = 0x4000000  /* upper 64M of SDRAM */
 }
 
 SECTIONS
@@ -16,7 +15,7 @@ SECTIONS
 		_ftext = .;
 		*(.text .stub .text.* .gnu.linkonce.t.*)
 		_etext = .;
-	} > sdram
+	} > flash
 
 	.rodata :
 	{
@@ -25,7 +24,7 @@ SECTIONS
 		*(.rodata .rodata.* .gnu.linkonce.r.*)
 		*(.rodata1)
 		_erodata = .;
-	} > sdram
+	} > flash
 
 	.data :
 	{
@@ -36,7 +35,7 @@ SECTIONS
 		_gp = ALIGN(16);
 		*(.sdata .sdata.* .gnu.linkonce.s.*)
 		_edata = .;
-	} > sdram
+	} > flash
 
 	.bss :
 	{
@@ -48,6 +47,7 @@ SECTIONS
 		*(.dynbss)
 		*(.bss .bss.* .gnu.linkonce.b.*)
 		*(COMMON)
+		. = ALIGN(4);
 		_ebss = .;
 		_end = .;
 	} > sdram
