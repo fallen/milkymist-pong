@@ -1,6 +1,8 @@
 /*
- * Milkymist Democompo
+ * Milkymist Pong
  * Copyright (C) 2007, 2008, 2009 Sebastien Bourdeauducq
+ * Copyright (C) 2009 Johan Euphrosine
+ * Copyright (C) 2012 Yann Sionneau
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +20,6 @@
 #include <stdio.h>
 #include <console.h>
 #include <uart.h>
-//#include <cffat.h>
 #include <system.h>
 #include <irq.h>
 #include <board.h>
@@ -46,41 +47,37 @@ int main(void)
 
 	irq_setmask(0);
 	irq_enable(1);
-//	uart_async_init();
 	uart_init();
-	vga_init(0); // Use unblanked for now
+	vga_init(0);
 	brd_init();
 	tmu_init();
-//	time_init();
-//	mem_init();
-//	snd_init();
-//	pfpu_init();
 	vga_unblank();
 
-	int j;
-	int x = 42;
-	int y = 42;
-	int dx = 3;
-	int dy = 3;
-	int w;
-	int h;
+	int j;      /* counter to iterate over framebuffer's pixel */
+	int x = 42; /* horizontal coordinate of the Pong ball */
+	int y = 42; /* vertical coordinate of the Pong ball */
+	int dx = 3; /* horizontal speed of the Pong ball */
+	int dy = 3; /* vertical speed of the Pong ball */
+	int w;      /* counter to iterate over the width of the Pong ball and the paddle */
+	int h;      /* counter to iterate over the height of Pong ball */
 
-	int k = 0;
-	int input = 0;
+	int input = 0; /* contains the state of the 3 push buttons of Milkymist One board */
 
-	int p1x = 0;
-	int p1y = 0;
-	int p1s = 40;
-
-//	init_plasma();
+	int p1x = 0; /* horizontal coordinate of Player1's paddle */
+	int p1y = 0; /* vertical coordinate of Player1's paddle */
+	int p1s = 40;/* height of Player1's paddle */
+	/*
+	*  When the player's paddle hits the Pong ball, the paddle's height will be reduced to make the game harder.
+	*  When the player's paddle misses the Pong ball, the paddle's height will be increased to make the game easier.
+	*/
 	
 	while(1) {
 
-	  input = CSR_GPIO_IN;
-	  if (input & GPIO_BTN1) {
+	  input = CSR_GPIO_IN; /* read from GPIO input register containing state of 3 push buttons */
+	  if (input & GPIO_BTN1) { /* check the state of the 1st push button */
 	    p1y-=5;
 	  }
-	  if (input & GPIO_BTN2) {
+	  if (input & GPIO_BTN2) { /* check the state of the 2nd push button */
 	    p1y+=5;
 	  }
 
@@ -92,8 +89,6 @@ int main(void)
 	  
 	  for(j = 0; j < vga_vres*vga_hres; ++j)
 	    vga_backbuffer[j] = MAKERGB565(0, 0, 0);
-
-//	  update_plasma(x, y);
 
 	  for (w = 0; w < 10; ++w) {
 	    for (h = 0; h < 10; ++h) {
@@ -108,7 +103,7 @@ int main(void)
 	  }
 
 
-//	  flush_bridge_cache();
+	  flush_bridge_cache();
 
 	  vga_swap_buffers();
 
@@ -138,7 +133,6 @@ int main(void)
 	    dy = - dy;
 	  }
 
-	  k = k + 1;
 	}	
 	return 0;
 }
