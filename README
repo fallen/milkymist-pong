@@ -1,4 +1,4 @@
-[> Milkymist Demo Compo
+[> Milkymist Pong Demo
 -----------------------
 
 EDIT : This is a port of the pong game to Milkymist One board.
@@ -7,6 +7,18 @@ The pong game has originally been written by proppy during a workshop organized 
 This pong game was designed to run on the ML501 dev board.
 I just ported it to run on the Milkymist One board and to link with latest Milkymist software libraries.
 
+Compile: 
+
+    $ make
+
+Flash on the Milkymist One board: 
+
+    $ make load
+
+Beware, this will replace your BIOS with the Pong game, you will need to restore your BIOS in order to use
+Flickernoise to do some VJing afterward.
+
+Following is the original README file: 
 The idea here is to present a compo based on the Milkymist hardware platform
 within a month. It may be a 2D/3D compo (or 2D only) and must be less than 10min
 long.

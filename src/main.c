@@ -37,7 +37,6 @@
 #include <hal/pfpu.h>
 
 #include "color.h"
-//#include "plasma.h"
 
 int main(void)
 {
@@ -101,9 +100,6 @@ int main(void)
 	      vga_backbuffer[(p1y+h)*vga_hres + (p1x+w)] = MAKERGB565(0xff, 0, 0);
 	    }
 	  }
-
-
-	  flush_bridge_cache();
 
 	  vga_swap_buffers();
 

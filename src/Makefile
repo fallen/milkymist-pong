@@ -3,7 +3,6 @@ SERIALPORT?=/dev/ttyUSB0
 include $(MMDIR)/software/include.mak
 
 OBJECTS=crt0.o isr.o tick.o main.o
-#OBJECTS=crt0.o isr.o tick.o main.o plasma.o angle.o
 SEGMENTS=-j .text -j .data -j .rodata
 
 all: boot.bin
@@ -23,7 +22,7 @@ depend:
 	makedepend -Y -- $(CFLAGS) -- *.c
 
 clean:
-	rm -f $(OBJECTS) boot.elf boot.bin .*~ *~ Makefile.bak noarm.h noarm.raw
+	rm -f $(OBJECTS) boot.elf boot.bin .*~ *~ Makefile.bak
 
 load: boot.bin flash_bios.data fjmem.bit
 	sudo jtag flash_bios.data
